@@ -1,0 +1,20 @@
+{
+  "name": "kaveri-nursery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Modern responsive nursery management website for Kaveri Nursery.",
+  "scripts": {
+    "install:all": "npm install --prefix client && npm install --prefix server",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "npm run start --prefix server",
+    "seed": "npm run seed --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "gh-pages": "^6.3.0"
+  },
+  "dependencies": {
+    "pg": "^8.21.0"
+  }
+}
