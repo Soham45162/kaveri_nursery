@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node --check server.js",
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node seed/seed.js",
