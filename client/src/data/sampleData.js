@@ -1,10 +1,12 @@
+const publicAsset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
+
 export const heroImage =
   'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85';
 
 export const owner = {
   name: 'Ramnath Kedar',
   title: 'Founder & Horticulture Consultant',
-  photo: '/images/ramnath.jpeg',
+  photo: publicAsset('/images/ramnath.jpeg'),
   story: 'Kaveri Nursery began as a family garden with 200 saplings and has grown into a trusted destination for home gardeners, farms, resorts, and landscape projects.',
   achievements: ['18+ years of plant care experience', 'Award-winning native plant collection', '750+ completed gardens'],
   mission: 'To make healthy, climate-smart plants accessible with honest guidance and lifelong care support.',
@@ -12,7 +14,7 @@ export const owner = {
 };
 
 export const businessInfo = {
-  logo: '/images/kaveri_logo.jpeg',
+  logo: publicAsset('/images/kaveri_logo.jpeg'),
   phoneDisplay: '+91 9850779272',
   whatsappNumber: '9850779272',
   email: 'ramnathkedar@gmail.com',

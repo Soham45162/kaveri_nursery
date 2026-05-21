@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/kaveri_nursery/',
+  base: process.env.VITE_BASE_PATH || '/kaveri_nursery/',
 
   server: {
     port: 5173
