@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
+import ensureAdmin from './config/admin.js';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import plantRoutes from './routes/plantRoutes.js';
@@ -13,6 +14,7 @@ import contactRoutes from './routes/contactRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
 
 await connectDB();
+await ensureAdmin();
 
 const app = express();
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
