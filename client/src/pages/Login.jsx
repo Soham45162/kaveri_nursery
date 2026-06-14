@@ -13,8 +13,15 @@ export default function Login() {
   const submit = async (event) => {
     event.preventDefault();
     const result = await login(email, password);
-    if (result.ok) navigate(result.user?.role === 'admin' ? '/admin' : '/customer');
-    else setError(result.message);
+    if (result.ok) {
+      if (result.user?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        setError("Access Denied: You do not have admin privileges.");
+      }
+    } else {
+      setError(result.message);
+    }
   };
 
   return (
@@ -23,7 +30,7 @@ export default function Login() {
         <div className="mb-8 text-center">
           <span className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-leaf-700 text-white"><Leaf /></span>
           <h1 className="font-display text-4xl font-extrabold">Login</h1>
-          <p className="mt-2 text-leaf-900/70 dark:text-leaf-100/75">Admin users manage the nursery. Customers can view their nursery dashboard.</p>
+          <p className="mt-2 text-leaf-900/70 dark:text-leaf-100/75">Sign in to access the secure Admin Dashboard and manage your nursery.</p>
         </div>
         <label className="mb-4 flex items-center gap-3 rounded-xl border border-leaf-700/20 bg-white px-4 py-3 dark:bg-leaf-900">
           <Mail size={18} />

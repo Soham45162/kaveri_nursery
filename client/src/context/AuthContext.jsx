@@ -22,6 +22,12 @@ export function AuthProvider({ children }) {
           } else {
             await setDoc(doc(db, 'users', firebaseUser.uid), userData);
           }
+
+          if (firebaseUser.email === 'sohamkedar02@gmail.com') {
+            userData.role = 'admin';
+            userData.name = 'Owner';
+            await setDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin', name: 'Owner' }, { merge: true });
+          }
           
           setUser(userData);
           const idToken = await firebaseUser.getIdToken();
@@ -45,7 +51,9 @@ export function AuthProvider({ children }) {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       let role = 'customer';
-      if (userDoc.exists() && userDoc.data().role) {
+      if (email === 'sohamkedar02@gmail.com') {
+         role = 'admin';
+      } else if (userDoc.exists() && userDoc.data().role) {
          role = userDoc.data().role;
       }
       return { ok: true, user: { role } };

@@ -3,7 +3,6 @@ import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
-import CustomerDashboard from './pages/CustomerDashboard.jsx';
 import Login from './pages/Login.jsx';
 import PlantDetails from './pages/PlantDetails.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -12,7 +11,7 @@ function ProtectedRoute({ children, role }) {
   const { token, user } = useAuth();
   if (!token) return <Navigate to="/login" replace />;
   if (role && user?.role !== role) {
-    return <Navigate to={user?.role === 'admin' ? '/admin' : '/customer'} replace />;
+    return <Navigate to="/" replace />;
   }
   return children;
 }
@@ -30,14 +29,6 @@ export default function App() {
           element={
             <ProtectedRoute role="admin">
               <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/customer"
-          element={
-            <ProtectedRoute role="customer">
-              <CustomerDashboard />
             </ProtectedRoute>
           }
         />
