@@ -385,11 +385,7 @@ export default function AdminDashboard() {
             </aside>
           </div>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            <Panel title="Sales Analytics" icon={BarChart3}><div className="h-44 rounded-xl bg-gradient-to-t from-leaf-700 to-leaf-300" /></Panel>
-            <Panel title="Orders" icon={ShoppingBag}><p>32 active orders, 8 ready for delivery, 4 pending payment confirmations.</p></Panel>
-            <Panel title="Customers" icon={Users}><p>Customer list, order history, newsletter subscriptions, and live chat leads are API-ready.</p></Panel>
-          </div>
+
 
           <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_0.75fr]">
             <form onSubmit={saveBill} className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
