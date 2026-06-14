@@ -5,13 +5,13 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForDevelopment123456789",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "kaveri-nursery-demo.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "kaveri-nursery-demo",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "kaveri-nursery-demo.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789012",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789012:web:abcdef1234567890abcdef",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || ""
+  apiKey: "AIzaSyAQrHGZ7egAguqVDFlvadUy2SXgJ7F72Bo",
+  authDomain: "kaveri-nursery.firebaseapp.com",
+  projectId: "kaveri-nursery",
+  storageBucket: "kaveri-nursery.firebasestorage.app",
+  messagingSenderId: "888514098956",
+  appId: "1:888514098956:web:b1c252bc570d3711acfb29",
+  measurementId: "G-1N8HMBNHPC"
 };
 
 const app = initializeApp(firebaseConfig);
