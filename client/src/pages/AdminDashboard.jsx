@@ -4,7 +4,6 @@ import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc } from 'firebase
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, storage } from '../config/firebase.js';
-import { plants, projects, reviews } from '../data/sampleData.js';
 
 const emptyBillLine = { plantName: '', qty: 1, rate: 0 };
 const emptyBillForm = {

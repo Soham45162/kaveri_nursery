@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Award, CalendarClock, CheckCircle2, Leaf, Mail, MapPin, MessageCircle, Phone, Search, Sparkles, Star, Trees, Users, X } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
-import { blogs, businessInfo, faqs, heroImage, owner, plants, projects, reviews } from '../data/sampleData.js';
+import { blogs, businessInfo, faqs, heroImage, owner } from '../data/sampleData.js';
 import PlantCard from '../components/PlantCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatCard from '../components/StatCard.jsx';
