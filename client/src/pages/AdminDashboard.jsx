@@ -272,10 +272,10 @@ export default function AdminDashboard() {
           </div>
 
           <div className="mb-8 grid gap-5 md:grid-cols-4">
-            <Metric icon={ShoppingBag} label="Monthly Sales" value="₹2.8L" />
-            <Metric icon={Users} label="Visitors" value="18.4K" />
+            <Metric icon={ShoppingBag} label="Monthly Sales" value="₹0" />
+            <Metric icon={Users} label="Visitors" value="0" />
             <Metric icon={Package} label="Inventory" value={inventory.length} />
-            <Metric icon={Bell} label="Notifications" value="12" />
+            <Metric icon={Bell} label="Notifications" value="0" />
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[1fr_0.7fr]">
