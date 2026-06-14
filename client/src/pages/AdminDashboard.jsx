@@ -42,6 +42,7 @@ export default function AdminDashboard() {
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [visitorsCount, setVisitorsCount] = useState(0);
+  const [laboursCount, setLaboursCount] = useState(0);
 
   const addPlant = async (event) => {
     event.preventDefault();
@@ -104,6 +105,9 @@ export default function AdminDashboard() {
         if (visitorSnap.exists()) {
           setVisitorsCount(visitorSnap.data().count || 0);
         }
+
+        const labSnap = await getDocs(collection(db, 'labours'));
+        setLaboursCount(labSnap.size);
       } catch (error) {
         console.error("Error loading admin data", error);
       }
@@ -290,10 +294,11 @@ export default function AdminDashboard() {
             <button onClick={logout} className="btn-secondary"><LogOut size={18} /> Logout</button>
           </div>
 
-          <div className="mb-8 grid gap-5 md:grid-cols-3">
+          <div className="mb-8 grid gap-5 md:grid-cols-4">
             <Metric icon={ShoppingBag} label="Monthly Sales" value={`₹${monthlySales.toLocaleString()}`} />
             <Metric icon={Users} label="Visitors" value={visitorsCount >= 1000 ? (visitorsCount/1000).toFixed(1) + 'K' : visitorsCount} />
             <Metric icon={Package} label="Inventory" value={inventory.length} />
+            <Metric icon={BriefcaseBusiness} label="Labours" value={laboursCount} />
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[1fr_0.7fr]">
