@@ -6,7 +6,7 @@ import PlantCard from '../components/PlantCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatCard from '../components/StatCard.jsx';
 
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, increment, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase.js';
 
@@ -51,7 +51,26 @@ export default function Home() {
          console.error(error);
       }
     }
+
+    async function trackVisitor() {
+      if (sessionStorage.getItem('visited')) return;
+      sessionStorage.setItem('visited', 'true');
+      
+      try {
+        const statsRef = doc(db, 'stats', 'visitors');
+        const snap = await getDoc(statsRef);
+        if (snap.exists()) {
+          await updateDoc(statsRef, { count: increment(1) });
+        } else {
+          await setDoc(statsRef, { count: 1 });
+        }
+      } catch (err) {
+        console.error('Error tracking visitor:', err);
+      }
+    }
+
     loadData();
+    trackVisitor();
   }, []);
 
   const plantCategories = ['All', ...new Set(livePlants.map((plant) => plant.category))];

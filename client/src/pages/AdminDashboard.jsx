@@ -1,6 +1,6 @@
 import { BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, storage } from '../config/firebase.js';
@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [bills, setBills] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [editingProjectId, setEditingProjectId] = useState(null);
+  const [visitorsCount, setVisitorsCount] = useState(0);
 
   const addPlant = async (event) => {
     event.preventDefault();
@@ -97,6 +98,11 @@ export default function AdminDashboard() {
         
         const billSnap = await getDocs(collection(db, 'bills'));
         if (!billSnap.empty) setBills(billSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+
+        const visitorSnap = await getDoc(doc(db, 'stats', 'visitors'));
+        if (visitorSnap.exists()) {
+          setVisitorsCount(visitorSnap.data().count || 0);
+        }
       } catch (error) {
         console.error("Error loading admin data", error);
       }
@@ -259,6 +265,18 @@ export default function AdminDashboard() {
     } catch (e) { console.error(e); }
   };
 
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const monthlySales = bills.reduce((total, bill) => {
+    const billDate = new Date(bill.date);
+    if (billDate.getMonth() === currentMonth && billDate.getFullYear() === currentYear) {
+      const billTotal = bill.lines.reduce((sum, line) => sum + (Number(line.qty) * Number(line.rate)), 0);
+      return total + billTotal;
+    }
+    return total;
+  }, 0);
+
   return (
     <main className="pt-24">
       <section className="section-pad bg-leaf-50 dark:bg-[#0c2411]">
@@ -271,11 +289,10 @@ export default function AdminDashboard() {
             <button onClick={logout} className="btn-secondary"><LogOut size={18} /> Logout</button>
           </div>
 
-          <div className="mb-8 grid gap-5 md:grid-cols-4">
-            <Metric icon={ShoppingBag} label="Monthly Sales" value="₹0" />
-            <Metric icon={Users} label="Visitors" value="0" />
+          <div className="mb-8 grid gap-5 md:grid-cols-3">
+            <Metric icon={ShoppingBag} label="Monthly Sales" value={`₹${monthlySales.toLocaleString()}`} />
+            <Metric icon={Users} label="Visitors" value={visitorsCount >= 1000 ? (visitorsCount/1000).toFixed(1) + 'K' : visitorsCount} />
             <Metric icon={Package} label="Inventory" value={inventory.length} />
-            <Metric icon={Bell} label="Notifications" value="0" />
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[1fr_0.7fr]">
