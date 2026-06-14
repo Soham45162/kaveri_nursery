@@ -29,7 +29,7 @@ export default function Footer() {
           <p className="mb-3 font-bold">Follow our garden work</p>
           <div className="flex gap-3">
             {[
-              { Icon: Instagram, href: "https://instagram.com/" },
+              { Icon: Instagram, href: "https://instagram.com/kaveri_nursery01" },
               { Icon: Facebook, href: "#" },
               { Icon: Linkedin, href: "#" }
             ].map(({ Icon, href }, index) => (
