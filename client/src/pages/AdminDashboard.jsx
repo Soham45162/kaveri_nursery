@@ -1,10 +1,11 @@
-import axios from 'axios';
 import { BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
+import { db, storage } from '../config/firebase.js';
 import { plants, projects, reviews } from '../data/sampleData.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const emptyBillLine = { plantName: '', qty: 1, rate: 0 };
 const emptyBillForm = {
   type: 'Quotation',
@@ -72,9 +73,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function loadProjects() {
       try {
-        const { data } = await axios.get(`${API_URL}/gallery`);
-        if (!data.length) return;
-        setManagedProjects(data.map(apiProjectToUi));
+        const querySnapshot = await getDocs(collection(db, 'gallery'));
+        if (querySnapshot.empty) return;
+        const loadedProjects = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        setManagedProjects(loadedProjects.map(apiProjectToUi));
       } catch (error) {
         // Keep sample projects available when the API is not running.
       }
@@ -86,36 +88,44 @@ export default function AdminDashboard() {
     event.preventDefault();
     if (!projectForm.title || !projectForm.after || !projectForm.scope) return;
 
-    const projectPayload = {
-      ...projectForm,
-      id: editingProjectId || crypto.randomUUID(),
-      plantsUsed: projectForm.plantsUsed.split(',').map((item) => item.trim()).filter(Boolean),
-      before: projectForm.before || projectForm.after
-    };
+    let beforeUrl = projectForm.before;
+    let afterUrl = projectForm.after;
 
     try {
-      const body = new FormData();
-      body.append('title', projectForm.title);
-      body.append('category', projectForm.category);
-      body.append('location', projectForm.location);
-      body.append('duration', projectForm.duration);
-      body.append('budget', projectForm.budget);
-      body.append('scope', projectForm.scope);
-      body.append('plantsUsed', projectForm.plantsUsed);
-      body.append('result', projectForm.result);
-      body.append('description', projectForm.result);
-      if (projectForm.beforeFile) body.append('beforeImage', projectForm.beforeFile);
-      if (projectForm.afterFile) body.append('afterImage', projectForm.afterFile);
-      if (!projectForm.afterFile) body.append('image', projectForm.after);
-      if (!projectForm.beforeFile) body.append('beforeImage', projectForm.before || projectForm.after);
-      if (!projectForm.afterFile) body.append('afterImage', projectForm.after);
+      if (projectForm.beforeFile) {
+        const beforeRef = ref(storage, `gallery/before-${Date.now()}`);
+        await uploadBytes(beforeRef, projectForm.beforeFile);
+        beforeUrl = await getDownloadURL(beforeRef);
+      }
+      if (projectForm.afterFile) {
+        const afterRef = ref(storage, `gallery/after-${Date.now()}`);
+        await uploadBytes(afterRef, projectForm.afterFile);
+        afterUrl = await getDownloadURL(afterRef);
+      }
 
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const request = editingProjectId
-        ? axios.put(`${API_URL}/gallery/${editingProjectId}`, body, config)
-        : axios.post(`${API_URL}/gallery`, body, config);
-      const { data } = await request;
-      const savedProject = apiProjectToUi(data);
+      const projectData = {
+        title: projectForm.title,
+        category: projectForm.category,
+        location: projectForm.location,
+        duration: projectForm.duration,
+        budget: projectForm.budget,
+        scope: projectForm.scope,
+        plantsUsed: projectForm.plantsUsed.split(',').map((item) => item.trim()).filter(Boolean),
+        result: projectForm.result,
+        beforeImage: beforeUrl,
+        afterImage: afterUrl,
+        description: projectForm.result
+      };
+
+      let savedId = editingProjectId;
+      if (editingProjectId) {
+        await updateDoc(doc(db, 'gallery', editingProjectId), projectData);
+      } else {
+        const docRef = await addDoc(collection(db, 'gallery'), projectData);
+        savedId = docRef.id;
+      }
+      
+      const savedProject = apiProjectToUi({ _id: savedId, ...projectData });
       setManagedProjects((current) => {
         if (editingProjectId) {
           return current.map((project) => (project.id === editingProjectId ? savedProject : project));
@@ -124,19 +134,9 @@ export default function AdminDashboard() {
       });
       setEditingProjectId(null);
       setProjectForm(emptyProjectForm);
-      return;
     } catch (error) {
-      // Keep local editing responsive if the API is temporarily unavailable.
+      console.error("Error saving project", error);
     }
-
-    setManagedProjects((current) => {
-      if (editingProjectId) {
-        return current.map((project) => (project.id === editingProjectId ? projectPayload : project));
-      }
-      return [projectPayload, ...current];
-    });
-    setEditingProjectId(null);
-    setProjectForm(emptyProjectForm);
   };
 
   const editProject = (project) => {
@@ -159,7 +159,7 @@ export default function AdminDashboard() {
 
   const removeProject = async (id) => {
     try {
-      await axios.delete(`${API_URL}/gallery/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await deleteDoc(doc(db, 'gallery', id));
     } catch (error) {
       // Local fallback keeps the UI responsive in demo mode.
     }
@@ -491,9 +491,8 @@ function UploadBox({ label, preview, onChange }) {
 }
 
 function apiProjectToUi(project) {
-  const mainImage = resolveAsset(project.afterImage || project.image);
   return {
-    id: project._id,
+    id: project._id || project.id,
     title: project.title,
     category: project.category,
     location: project.location || '',
@@ -502,15 +501,9 @@ function apiProjectToUi(project) {
     scope: project.scope || project.description || '',
     plantsUsed: project.plantsUsed || [],
     result: project.result || project.description || '',
-    before: resolveAsset(project.beforeImage || project.image),
-    after: mainImage
+    before: project.beforeImage || project.image || '',
+    after: project.afterImage || project.image || ''
   };
-}
-
-function resolveAsset(path) {
-  if (!path) return '';
-  if (path.startsWith('http') || path.startsWith('blob:')) return path;
-  return `${API_URL.replace('/api', '')}${path}`;
 }
 
 function Metric({ icon: Icon, label, value }) {

@@ -20,12 +20,22 @@ body {
   margin: 0;
   min-width: 320px;
   font-family: Inter, system-ui, sans-serif;
-  background: #fff8ec;
+  background: linear-gradient(-45deg, #fff8ec, #f1f8ed, #ffffff, #fdfaf2);
+  background-size: 400% 400%;
+  animation: gradientBG 15s ease infinite;
   color: #173f1a;
 }
 
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 .dark body {
-  background: #07130a;
+  background: linear-gradient(-45deg, #07130a, #0c2411, #0a1c0d, #050d07);
+  background-size: 400% 400%;
+  animation: gradientBG 15s ease infinite;
   color: #f1f8ed;
 }
 
@@ -35,15 +45,17 @@ body {
 }
 
 .glass {
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 20px 60px rgba(20, 83, 45, 0.14);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 40px rgba(20, 83, 45, 0.08), inset 0 0 0 1px rgba(255,255,255,0.5);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .dark .glass {
-  border-color: rgba(158, 213, 134, 0.18);
-  background: rgba(8, 32, 16, 0.72);
+  border-color: rgba(158, 213, 134, 0.15);
+  background: rgba(8, 32, 16, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255,255,255,0.05);
 }
 
 .section-pad {
@@ -56,11 +68,11 @@ body {
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-full bg-leaf-700 px-6 py-3 font-semibold text-white shadow-glow transition duration-300 hover:-translate-y-1 hover:bg-leaf-900 focus:outline-none focus:ring-4 focus:ring-leaf-300;
+  @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-leaf-700 to-leaf-500 px-6 py-3 font-bold text-white shadow-[0_8px_20px_rgba(45,111,44,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(45,111,44,0.4)] hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-leaf-300;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-full border border-leaf-700/30 bg-white/70 px-6 py-3 font-semibold text-leaf-900 transition duration-300 hover:-translate-y-1 hover:bg-leaf-50 dark:bg-leaf-900/50 dark:text-leaf-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-full border border-leaf-700/20 bg-white/60 px-6 py-3 font-bold text-leaf-900 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-md dark:border-leaf-300/20 dark:bg-leaf-900/40 dark:text-leaf-50 dark:hover:bg-leaf-700;
 }
 
 .card-hover {
