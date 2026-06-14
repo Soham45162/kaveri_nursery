@@ -33,56 +33,88 @@ const emptyProjectForm = {
 
 export default function AdminDashboard() {
   const { logout, token, user } = useAuth();
-  const [inventory, setInventory] = useState(plants);
-  const [managedProjects, setManagedProjects] = useState(projects);
-  const [form, setForm] = useState({ name: '', price: '', stock: '', category: 'Indoor', description: '' });
+  const [inventory, setInventory] = useState([]);
+  const [adminReviews, setAdminReviews] = useState([]);
+  const [managedProjects, setManagedProjects] = useState([]);
+  const [form, setForm] = useState({ name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null });
   const [billForm, setBillForm] = useState(emptyBillForm);
   const [bills, setBills] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [editingProjectId, setEditingProjectId] = useState(null);
 
-  const addPlant = (event) => {
+  const addPlant = async (event) => {
     event.preventDefault();
-    if (!form.name) return;
-    setInventory((current) => [
-      {
-        _id: crypto.randomUUID(),
-        ...form,
-        price: Number(form.price),
-        stock: Number(form.stock),
-        discount: 0,
-        image: 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-        scientificName: 'Add scientific name',
-        water: 'Moderate',
-        sunlight: 'Indirect light',
-        soil: 'Well-drained soil',
-        temperature: '18-32°C',
-        growthTips: 'Update growth tips from plant management.',
-        fertilizer: 'Update fertilizer tips.',
-        benefits: 'Update plant benefits.',
-        diseases: 'Update disease info.',
-        seasonalCare: 'Update seasonal care.'
-      },
-      ...current
-    ]);
-    setForm({ name: '', price: '', stock: '', category: 'Indoor', description: '' });
+    if (!form.name || !form.price || !form.stock) return;
+
+    let imageUrl = 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80';
+    if (form.imageFile) {
+       const imageRef = ref(storage, `plants/${Date.now()}`);
+       await uploadBytes(imageRef, form.imageFile);
+       imageUrl = await getDownloadURL(imageRef);
+    }
+
+    const plantData = {
+      ...form,
+      price: Number(form.price),
+      stock: Number(form.stock),
+      discount: 0,
+      image: imageUrl,
+      scientificName: form.scientificName || 'Add scientific name',
+      water: 'Moderate', sunlight: 'Indirect light', soil: 'Well-drained soil', temperature: '18-32°C',
+      growthTips: 'Update growth tips from plant management.', fertilizer: 'Update fertilizer tips.',
+      benefits: 'Update plant benefits.', diseases: 'Update disease info.', seasonalCare: 'Update seasonal care.'
+    };
+    delete plantData.imageFile;
+
+    try {
+      const docRef = await addDoc(collection(db, 'plants'), plantData);
+      setInventory([{ _id: docRef.id, ...plantData }, ...inventory]);
+      setForm({ name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null });
+    } catch (e) {
+      console.error("Error adding plant", e);
+    }
   };
 
-  const removePlant = (id) => setInventory((current) => current.filter((plant) => plant._id !== id));
+  const removePlant = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'plants', id));
+      setInventory(current => current.filter(p => p._id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
-    async function loadProjects() {
+    async function loadData() {
       try {
-        const querySnapshot = await getDocs(collection(db, 'gallery'));
-        if (querySnapshot.empty) return;
-        const loadedProjects = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        setManagedProjects(loadedProjects.map(apiProjectToUi));
+        const projSnap = await getDocs(collection(db, 'gallery'));
+        if (!projSnap.empty) setManagedProjects(projSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).map(apiProjectToUi));
+
+        const plantSnap = await getDocs(collection(db, 'plants'));
+        if (!plantSnap.empty) setInventory(plantSnap.docs.map(docSnap => ({ _id: docSnap.id, ...docSnap.data() })));
+
+        const revSnap = await getDocs(collection(db, 'reviews'));
+        if (!revSnap.empty) setAdminReviews(revSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
       } catch (error) {
-        // Keep sample projects available when the API is not running.
+        console.error("Error loading admin data", error);
       }
     }
-    loadProjects();
+    loadData();
   }, []);
+
+  const approveReview = async (id) => {
+    try {
+      await updateDoc(doc(db, 'reviews', id), { approved: true });
+      setAdminReviews(current => current.map(r => r.id === id ? { ...r, approved: true } : r));
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteReview = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'reviews', id));
+      setAdminReviews(current => current.filter(r => r.id !== id));
+    } catch (e) { console.error(e); }
+  };
 
   const addOrUpdateProject = async (event) => {
     event.preventDefault();
@@ -285,6 +317,7 @@ export default function AdminDashboard() {
                 <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold"><Plus /> Add New Plant</h2>
                 <div className="grid gap-3">
                   <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                  <input value={form.scientificName} onChange={(e) => setForm({ ...form, scientificName: e.target.value })} placeholder="Scientific name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                   <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
                     <option>Indoor</option><option>Outdoor</option><option>Flowering</option><option>Fruit</option><option>Medicinal</option>
                   </select>
@@ -294,21 +327,27 @@ export default function AdminDashboard() {
                   </div>
                   <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-leaf-700/40 px-4 py-6 font-bold text-leaf-700 dark:text-leaf-300">
-                    <Image size={18} /> Upload plant image
-                    <input type="file" className="hidden" />
+                    <Image size={18} /> {form.imageFile ? "Image Selected" : "Upload plant image"}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => setForm({...form, imageFile: e.target.files[0]})} />
                   </label>
                   <button className="btn-primary"><Plus size={18} /> Save Plant</button>
                 </div>
               </form>
 
               <Panel title="Review Approvals" icon={Star}>
-                {reviews.map((review) => (
+                {adminReviews.length === 0 && <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">No reviews found.</p>}
+                {adminReviews.map((review) => (
                   <div key={review.id} className="mb-3 rounded-xl bg-leaf-50 p-4 dark:bg-[#0c2411]">
-                    <p className="font-bold">{review.name}</p>
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="font-bold">{review.name}</p>
+                      {review.approved ? <span className="text-xs font-bold text-leaf-700 dark:text-leaf-300">Approved</span> : <span className="text-xs font-bold text-yellow-600">Pending</span>}
+                    </div>
                     <p className="line-clamp-2 text-sm text-leaf-900/70 dark:text-leaf-100/75">{review.text}</p>
                     <div className="mt-3 flex gap-2">
-                      <button className="rounded-full bg-leaf-700 px-3 py-1 text-sm font-bold text-white"><Check size={14} className="inline" /> Approve</button>
-                      <button className="rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700">Delete</button>
+                      {!review.approved && (
+                        <button onClick={() => approveReview(review.id)} type="button" className="rounded-full bg-leaf-700 px-3 py-1 text-sm font-bold text-white"><Check size={14} className="inline" /> Approve</button>
+                      )}
+                      <button onClick={() => deleteReview(review.id)} type="button" className="rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700">Delete</button>
                     </div>
                   </div>
                 ))}

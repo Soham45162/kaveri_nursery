@@ -6,8 +6,11 @@ import PlantCard from '../components/PlantCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatCard from '../components/StatCard.jsx';
 
+import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../config/firebase.js';
+
 const projectCategories = ['All', 'Landscaping', 'Garden Design', 'Farm Work'];
-const plantCategories = ['All', ...new Set(plants.map((plant) => plant.category))];
 const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(businessInfo.mapQuery)}&output=embed`;
 const whatsappLink = (message) => `https://wa.me/${businessInfo.whatsappNumber}?text=${encodeURIComponent(message)}`;
 
@@ -16,39 +19,81 @@ export default function Home() {
   const [plantCategory, setPlantCategory] = useState('All');
   const [projectCategory, setProjectCategory] = useState('All');
   const [selectedProject, setSelectedProject] = useState(null);
-  const [customerReviews, setCustomerReviews] = useState(reviews);
-  const [reviewForm, setReviewForm] = useState({ name: '', rating: 5, text: '', plantPhoto: '' });
+  
+  const [livePlants, setLivePlants] = useState([]);
+  const [customerReviews, setCustomerReviews] = useState([]);
+  const [reviewForm, setReviewForm] = useState({ name: '', rating: 5, text: '', plantPhoto: null, previewUrl: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const plantSnap = await getDocs(collection(db, 'plants'));
+        if (!plantSnap.empty) setLivePlants(plantSnap.docs.map(d => ({ _id: d.id, ...d.data() })));
+
+        const revSnap = await getDocs(collection(db, 'reviews'));
+        if (!revSnap.empty) {
+          const approved = revSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.approved);
+          setCustomerReviews(approved);
+        }
+      } catch (error) {
+         console.error(error);
+      }
+    }
+    loadData();
+  }, []);
+
+  const plantCategories = ['All', ...new Set(livePlants.map((plant) => plant.category))];
 
   const filteredPlants = useMemo(() => {
-    return plants.filter((plant) => {
+    return livePlants.filter((plant) => {
       const matchesQuery = [plant.name, plant.scientificName, plant.category].join(' ').toLowerCase().includes(plantQuery.toLowerCase());
       const matchesCategory = plantCategory === 'All' || plant.category === plantCategory;
       return matchesQuery && matchesCategory;
     });
-  }, [plantQuery, plantCategory]);
+  }, [plantQuery, plantCategory, livePlants]);
 
   const filteredProjects = projects.filter((project) => projectCategory === 'All' || project.category === projectCategory);
-  const averageRating = (customerReviews.reduce((sum, review) => sum + Number(review.rating), 0) / customerReviews.length).toFixed(1);
+  const averageRating = customerReviews.length > 0 ? (customerReviews.reduce((sum, review) => sum + Number(review.rating), 0) / customerReviews.length).toFixed(1) : "5.0";
 
-  const submitReview = (event) => {
+  const submitReview = async (event) => {
     event.preventDefault();
     if (!reviewForm.name || !reviewForm.text) return;
-    setCustomerReviews((current) => [
-      {
-        id: crypto.randomUUID(),
-        ...reviewForm,
-        rating: Number(reviewForm.rating),
-        photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
-        plantPhoto: reviewForm.plantPhoto || 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=600&q=80'
-      },
-      ...current
-    ]);
-    setReviewForm({ name: '', rating: 5, text: '', plantPhoto: '' });
+    setIsSubmitting(true);
+
+    let uploadedUrl = 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=600&q=80';
+    if (reviewForm.plantPhoto) {
+      try {
+         const imageRef = ref(storage, `reviews/${Date.now()}`);
+         await uploadBytes(imageRef, reviewForm.plantPhoto);
+         uploadedUrl = await getDownloadURL(imageRef);
+      } catch (e) {
+         console.error("Error uploading review photo", e);
+      }
+    }
+
+    const newReview = {
+      name: reviewForm.name,
+      rating: Number(reviewForm.rating),
+      text: reviewForm.text,
+      photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
+      plantPhoto: uploadedUrl,
+      approved: false
+    };
+
+    try {
+      await addDoc(collection(db, 'reviews'), newReview);
+      setReviewForm({ name: '', rating: 5, text: '', plantPhoto: null, previewUrl: '' });
+      alert("Thank you! Your review has been submitted for approval.");
+    } catch (error) {
+      console.error("Error submitting review", error);
+    }
+    setIsSubmitting(false);
   };
 
   const handleReviewPhoto = (file) => {
     if (!file) return;
-    setReviewForm((current) => ({ ...current, plantPhoto: URL.createObjectURL(file) }));
+    setReviewForm((current) => ({ ...current, plantPhoto: file, previewUrl: URL.createObjectURL(file) }));
   };
 
   return (
@@ -190,7 +235,8 @@ export default function Home() {
         <div className="container-page">
           <SectionHeader eyebrow="Plant Store & Inventory" title="Fresh stock, fair pricing, and care-ready plants" text="Every card includes price, availability, discount badges, wishlist actions, and detailed plant care pages. Admins can manage the same plant records from the dashboard." />
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {plants.slice(0, 6).map((plant) => <PlantCard key={plant._id} plant={plant} />)}
+            {livePlants.length === 0 && <p className="text-leaf-900/70">No plants available in the store yet.</p>}
+            {livePlants.slice(0, 6).map((plant) => <PlantCard key={plant._id} plant={plant} />)}
           </div>
         </div>
       </section>
@@ -220,11 +266,11 @@ export default function Home() {
                 <textarea value={reviewForm.text} onChange={(event) => setReviewForm({ ...reviewForm, text: event.target.value })} placeholder="Write your review" rows="4" className="rounded-xl border border-leaf-700/20 bg-white px-4 py-3 outline-none dark:bg-leaf-900" />
               </div>
               <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-leaf-700/40 bg-white p-4 text-center font-bold text-leaf-700 dark:bg-leaf-900 dark:text-leaf-300">
-                {reviewForm.plantPhoto ? <img src={reviewForm.plantPhoto} alt="Review plant preview" className="h-28 w-full rounded-lg object-cover" /> : <span>Upload plant photo</span>}
+                {reviewForm.previewUrl ? <img src={reviewForm.previewUrl} alt="Review plant preview" className="h-28 w-full rounded-lg object-cover" /> : <span>Upload plant photo</span>}
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => handleReviewPhoto(event.target.files?.[0])} />
               </label>
             </div>
-            <button className="btn-primary mt-5">Submit Review</button>
+            <button disabled={isSubmitting} className="btn-primary mt-5">{isSubmitting ? 'Submitting...' : 'Submit Review'}</button>
           </form>
           <div className="grid gap-6 md:grid-cols-3">
             {customerReviews.map((review) => (
