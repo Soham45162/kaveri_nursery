@@ -1,10 +1,31 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Droplets, Sprout, Sun, Thermometer } from 'lucide-react';
-import { plants } from '../data/sampleData.js';
+import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase.js';
 
 export default function PlantDetails() {
   const { id } = useParams();
-  const plant = plants.find((item) => item._id === id) || plants[0];
+  const [plant, setPlant] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadPlant() {
+      try {
+        const docSnap = await getDoc(doc(db, 'plants', id));
+        if (docSnap.exists()) {
+          setPlant({ _id: docSnap.id, ...docSnap.data() });
+        }
+      } catch (e) {
+        console.error("Error fetching plant details", e);
+      }
+      setLoading(false);
+    }
+    loadPlant();
+  }, [id]);
+
+  if (loading) return <main className="pt-28 section-pad"><div className="container-page text-center"><p className="text-xl font-bold">Loading plant details...</p></div></main>;
+  if (!plant) return <main className="pt-28 section-pad"><div className="container-page text-center"><p className="text-xl font-bold mb-4">Plant not found.</p><Link to="/" className="btn-primary">Return Home</Link></div></main>;
 
   return (
     <main className="pt-28">

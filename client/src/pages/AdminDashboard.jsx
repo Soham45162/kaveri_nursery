@@ -95,6 +95,9 @@ export default function AdminDashboard() {
 
         const revSnap = await getDocs(collection(db, 'reviews'));
         if (!revSnap.empty) setAdminReviews(revSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+        
+        const billSnap = await getDocs(collection(db, 'bills'));
+        if (!billSnap.empty) setBills(billSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
       } catch (error) {
         console.error("Error loading admin data", error);
       }
@@ -232,18 +235,29 @@ export default function AdminDashboard() {
     }));
   };
 
-  const saveBill = (event) => {
+  const saveBill = async (event) => {
     event.preventDefault();
     if (!billForm.customerName || billForm.lines.some((line) => !line.plantName)) return;
-    const bill = {
+    const billData = {
       ...billForm,
-      id: crypto.randomUUID(),
       number: `${billForm.type === 'Bill' ? 'BILL' : 'QT'}-${String(bills.length + 1).padStart(4, '0')}`,
       total: billTotal,
       createdAt: new Date().toLocaleString()
     };
-    setBills((current) => [bill, ...current]);
-    setBillForm(emptyBillForm);
+    try {
+      const docRef = await addDoc(collection(db, 'bills'), billData);
+      setBills((current) => [{ id: docRef.id, ...billData }, ...current]);
+      setBillForm(emptyBillForm);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteBill = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'bills', id));
+      setBills(current => current.filter(b => b.id !== id));
+    } catch (e) { console.error(e); }
   };
 
   return (
@@ -442,7 +456,10 @@ export default function AdminDashboard() {
                         <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{bill.type}</p>
                         <h3 className="text-xl font-extrabold">{bill.number}</h3>
                       </div>
-                      <span className="font-extrabold">Rs. {bill.total.toLocaleString()}</span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="font-extrabold">Rs. {bill.total.toLocaleString()}</span>
+                        <button onClick={() => deleteBill(bill.id)} className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"><Trash2 size={14} /></button>
+                      </div>
                     </div>
                     <p className="font-bold">{bill.customerName}</p>
                     <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">{bill.customerPhone || 'No phone'} · {bill.date}</p>

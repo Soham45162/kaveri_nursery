@@ -21,6 +21,7 @@ export default function Home() {
   const [selectedProject, setSelectedProject] = useState(null);
   
   const [livePlants, setLivePlants] = useState([]);
+  const [liveProjects, setLiveProjects] = useState([]);
   const [customerReviews, setCustomerReviews] = useState([]);
   const [reviewForm, setReviewForm] = useState({ name: '', rating: 5, text: '', plantPhoto: null, previewUrl: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +31,16 @@ export default function Home() {
       try {
         const plantSnap = await getDocs(collection(db, 'plants'));
         if (!plantSnap.empty) setLivePlants(plantSnap.docs.map(d => ({ _id: d.id, ...d.data() })));
+
+        const projSnap = await getDocs(collection(db, 'gallery'));
+        if (!projSnap.empty) {
+          setLiveProjects(projSnap.docs.map(d => ({ 
+            id: d.id, 
+            ...d.data(), 
+            before: d.data().beforeImage || '', 
+            after: d.data().afterImage || d.data().image || '' 
+          })));
+        }
 
         const revSnap = await getDocs(collection(db, 'reviews'));
         if (!revSnap.empty) {
@@ -53,7 +64,7 @@ export default function Home() {
     });
   }, [plantQuery, plantCategory, livePlants]);
 
-  const filteredProjects = projects.filter((project) => projectCategory === 'All' || project.category === projectCategory);
+  const filteredProjects = liveProjects.filter((project) => projectCategory === 'All' || project.category === projectCategory);
   const averageRating = customerReviews.length > 0 ? (customerReviews.reduce((sum, review) => sum + Number(review.rating), 0) / customerReviews.length).toFixed(1) : "5.0";
 
   const submitReview = async (event) => {
