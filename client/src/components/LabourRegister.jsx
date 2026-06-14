@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { UserPlus, Printer } from 'lucide-react';
+import { UserPlus, Printer, Trash2 } from 'lucide-react';
 
 export default function LabourRegister() {
   const [labours, setLabours] = useState([]);
@@ -39,6 +39,16 @@ export default function LabourRegister() {
     const docRef = await addDoc(collection(db, 'labours'), { ...form, joinedAt: new Date().toISOString() });
     setLabours([...labours, { id: docRef.id, ...form }]);
     setForm({ name: '', role: '', phone: '' });
+  };
+
+  const removeLabour = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this labourer?")) return;
+    try {
+      await deleteDoc(doc(db, 'labours', id));
+      setLabours(labours.filter(l => l.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const toggleStatus = async (labourId, day) => {
@@ -139,8 +149,19 @@ export default function LabourRegister() {
               const totals = calculateTotals(labour.id);
               return (
                 <tr key={labour.id} className="border-b border-leaf-700/10">
-                  <td className="p-3 font-bold border border-leaf-700/20">
-                    {labour.name} <span className="block text-xs font-normal text-gray-500">{labour.role}</span>
+                  <td className="p-3 font-bold border border-leaf-700/20 group">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        {labour.name} <span className="block text-xs font-normal text-gray-500">{labour.role}</span>
+                      </div>
+                      <button 
+                        onClick={() => removeLabour(labour.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded transition-all no-print"
+                        title="Remove Labourer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                   {daysArray.map(day => {
                     const status = attendance[labour.id]?.[day];
