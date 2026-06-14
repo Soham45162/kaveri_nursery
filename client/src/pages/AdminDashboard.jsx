@@ -4,6 +4,7 @@ import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc } from '
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, storage } from '../config/firebase.js';
+import LabourRegister from '../components/LabourRegister.jsx';
 
 const emptyBillLine = { plantName: '', qty: 1, rate: 0 };
 const emptyBillForm = {
@@ -542,6 +543,11 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+
+          <div className="mt-8 mb-8">
+            <LabourRegister />
+          </div>
+
         </div>
       </section>
     </main>
