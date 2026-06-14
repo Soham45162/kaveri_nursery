@@ -28,8 +28,12 @@ export default function Footer() {
         <div>
           <p className="mb-3 font-bold">Follow our garden work</p>
           <div className="flex gap-3">
-            {[Instagram, Facebook, Linkedin].map((Icon, index) => (
-              <a key={index} href="#" aria-label="Social media" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-leaf-500">
+            {[
+              { Icon: Instagram, href: "https://instagram.com/" },
+              { Icon: Facebook, href: "#" },
+              { Icon: Linkedin, href: "#" }
+            ].map(({ Icon, href }, index) => (
+              <a key={index} href={href} target={href !== '#' ? "_blank" : undefined} rel={href !== '#' ? "noopener noreferrer" : undefined} aria-label="Social media" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-leaf-500">
                 <Icon size={18} />
               </a>
             ))}
