@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { UserPlus, Printer, Trash2, Edit, DollarSign, History, X, Check } from 'lucide-react';
+import { UserPlus, Trash2, Edit, DollarSign, History, X, Check } from 'lucide-react';
 
 export default function LabourRegister() {
   const [labours, setLabours] = useState([]);
@@ -193,27 +193,18 @@ export default function LabourRegister() {
     return '';
   };
 
-  const handlePrint = () => {
-    document.body.classList.add('printing-labour');
-    window.print();
-    document.body.classList.remove('printing-labour');
-  };
-
   return (
-    <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 print-labour-container">
-      <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center no-print">
+    <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
+      <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <h2 className="text-2xl font-extrabold flex items-center gap-2"><UserPlus /> Labour Register</h2>
-        <div className="flex items-center gap-4">
-          <input 
-            type="month" 
-            value={monthKey} 
-            onChange={(e) => {
-              if(e.target.value) setCurrentDate(new Date(e.target.value + '-01T00:00:00'));
-            }} 
-            className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2" 
-          />
-          <button onClick={handlePrint} className="btn-secondary flex items-center gap-2"><Printer size={18}/> Print PDF</button>
-        </div>
+        <input 
+          type="month" 
+          value={monthKey} 
+          onChange={(e) => {
+            if(e.target.value) setCurrentDate(new Date(e.target.value + '-01T00:00:00'));
+          }} 
+          className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2" 
+        />
       </div>
 
       <form onSubmit={addLabour} className="mb-8 grid gap-4 sm:grid-cols-2 md:grid-cols-6 no-print">
