@@ -686,8 +686,12 @@ export default function AdminDashboard() {
                 <button 
                   type="button"
                   onClick={() => {
-                    window.currentPrintType = 'printing-bill';
+                    const isDark = document.documentElement.classList.contains('dark');
+                    if (isDark) document.documentElement.classList.remove('dark');
+                    document.body.classList.add('printing-bill');
                     window.print();
+                    document.body.classList.remove('printing-bill');
+                    if (isDark) document.documentElement.classList.add('dark');
                   }} 
                   className="btn-primary py-2 px-5 text-sm"
                 >
