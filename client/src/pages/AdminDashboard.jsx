@@ -686,9 +686,8 @@ export default function AdminDashboard() {
                 <button 
                   type="button"
                   onClick={() => {
-                    document.body.classList.add('printing-bill');
+                    window.currentPrintType = 'printing-bill';
                     window.print();
-                    document.body.classList.remove('printing-bill');
                   }} 
                   className="btn-primary py-2 px-5 text-sm"
                 >

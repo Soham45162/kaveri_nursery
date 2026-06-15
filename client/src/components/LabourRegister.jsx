@@ -202,9 +202,8 @@ export default function LabourRegister() {
             <button 
               type="button" 
               onClick={() => {
-                document.body.classList.add('printing-labour');
+                window.currentPrintType = 'printing-labour';
                 window.print();
-                document.body.classList.remove('printing-labour');
               }}
               className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >
@@ -320,9 +319,8 @@ export default function LabourRegister() {
             <button 
               type="button" 
               onClick={() => {
-                document.body.classList.add('printing-payroll');
+                window.currentPrintType = 'printing-payroll';
                 window.print();
-                document.body.classList.remove('printing-payroll');
               }}
               className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >
