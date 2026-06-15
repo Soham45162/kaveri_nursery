@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { UserPlus, Trash2, Edit, DollarSign, History, X, Check } from 'lucide-react';
+import { UserPlus, Trash2, Edit, DollarSign, History, X, Check, Printer } from 'lucide-react';
 
 export default function LabourRegister() {
   const [labours, setLabours] = useState([]);
@@ -195,8 +195,22 @@ export default function LabourRegister() {
 
   return (
     <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-      <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <h2 className="text-2xl font-extrabold flex items-center gap-2"><UserPlus /> Labour Register</h2>
+      <div className="attendance-section-wrap">
+        <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <h2 className="text-2xl font-extrabold flex items-center gap-2">
+            <UserPlus /> Labour Register
+            <button 
+              type="button" 
+              onClick={() => {
+                document.body.classList.add('printing-labour');
+                window.print();
+                document.body.classList.remove('printing-labour');
+              }}
+              className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
+            >
+              <Printer size={13} /> Print
+            </button>
+          </h2>
         <input 
           type="month" 
           value={monthKey} 
@@ -296,11 +310,25 @@ export default function LabourRegister() {
         <span className="flex items-center gap-2"><div className="w-5 h-5 bg-red-500 rounded"></div> Absent (A)</span>
         <span className="flex items-center gap-2 ml-4 text-gray-500 italic">Click a cell to toggle status</span>
       </div>
+      </div>
 
       {/* Monthly Payroll & Payments Ledger */}
-      <div className="mt-10 pt-8 border-t border-leaf-700/20">
+      <div className="mt-10 pt-8 border-t border-leaf-700/20 payroll-section-wrap">
         <div className="mb-6 no-print">
-          <h3 className="text-2xl font-extrabold flex items-center gap-2"><DollarSign /> Monthly Payroll & Payments Ledger</h3>
+          <h3 className="text-2xl font-extrabold flex items-center gap-2">
+            <DollarSign /> Monthly Payroll & Payments Ledger
+            <button 
+              type="button" 
+              onClick={() => {
+                document.body.classList.add('printing-payroll');
+                window.print();
+                document.body.classList.remove('printing-payroll');
+              }}
+              className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
+            >
+              <Printer size={13} /> Print
+            </button>
+          </h3>
           <p className="text-sm text-gray-500 mt-1">Calculated salaries, deductions, and recorded payments for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
         </div>
 

@@ -107,30 +107,97 @@ body {
 
 @media print {
   /* Dedicated print layout for bills / quotations */
-  body.printing-bill * {
-    visibility: hidden;
+  body.printing-bill header,
+  body.printing-bill footer,
+  body.printing-bill main > section {
+    display: none !important;
   }
-  body.printing-bill .print-bill-container,
-  body.printing-bill .print-bill-container * {
-    visibility: visible;
+
+  body.printing-bill .print-preview-modal {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
   }
+
+  body.printing-bill .print-preview-modal-content {
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  body.printing-bill .print-preview-scroll-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
   body.printing-bill .print-bill-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
     box-shadow: none !important;
     background: white !important;
     color: black !important;
     padding: 0 !important;
+    margin: 0 !important;
   }
+
   body.printing-bill .print-bill-container table,
   body.printing-bill .print-bill-container th,
   body.printing-bill .print-bill-container td {
     border: 1px solid #000000 !important;
   }
 
+  /* Dedicated print layout for labour attendance and payroll */
+  body.printing-labour,
+  body.printing-payroll {
+    background: white !important;
+    color: black !important;
+  }
 
+  body.printing-labour .section-pad,
+  body.printing-payroll .section-pad {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  body.printing-labour header,
+  body.printing-labour footer,
+  body.printing-labour .container-page > *:not(.print-labour-wrapper),
+  body.printing-payroll header,
+  body.printing-payroll footer,
+  body.printing-payroll .container-page > *:not(.print-labour-wrapper) {
+    display: none !important;
+  }
+
+  body.printing-labour .print-labour-wrapper,
+  body.printing-payroll .print-labour-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.printing-labour .print-labour-wrapper > div,
+  body.printing-payroll .print-labour-wrapper > div {
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  body.printing-labour .payroll-section-wrap,
+  body.printing-payroll .attendance-section-wrap {
+    display: none !important;
+  }
 
   .no-print {
     display: none !important;

@@ -643,7 +643,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="mt-8 mb-8">
+          <div className="mt-8 mb-8 print-labour-wrapper">
             <LabourRegister />
           </div>
 
@@ -652,11 +652,11 @@ export default function AdminDashboard() {
 
       {/* Print Preview Modal */}
       {previewBill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 no-print">
-          <div className="relative w-full max-w-4xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 print-preview-modal">
+          <div className="relative w-full max-w-4xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 print-preview-modal-content">
             
             {/* Modal Settings Bar */}
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-leaf-700/10 pb-4">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-leaf-700/10 pb-4 no-print">
               <div>
                 <h3 className="text-xl font-bold dark:text-white">Print Preview ({previewBill.type})</h3>
                 <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">Configure your print settings below</p>
@@ -706,7 +706,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Scrollable Bill Content (What actually gets printed) */}
-            <div className="max-h-[70vh] overflow-y-auto rounded-2xl bg-gray-50 p-4 dark:bg-black/20">
+            <div className="max-h-[70vh] overflow-y-auto rounded-2xl bg-gray-50 p-4 dark:bg-black/20 print-preview-scroll-wrapper">
               <div className="print-bill-container relative mx-auto max-w-[800px] border border-gray-300 bg-white p-8 font-sans text-black shadow-sm rounded-xl overflow-hidden min-h-[297mm]">
                 
                 {/* Background Watermark */}
