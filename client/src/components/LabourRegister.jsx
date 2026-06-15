@@ -193,8 +193,14 @@ export default function LabourRegister() {
     return '';
   };
 
+  const handlePrint = () => {
+    document.body.classList.add('printing-labour');
+    window.print();
+    document.body.classList.remove('printing-labour');
+  };
+
   return (
-    <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 print-container">
+    <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 print-labour-container">
       <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center no-print">
         <h2 className="text-2xl font-extrabold flex items-center gap-2"><UserPlus /> Labour Register</h2>
         <div className="flex items-center gap-4">
@@ -206,7 +212,7 @@ export default function LabourRegister() {
             }} 
             className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2" 
           />
-          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2"><Printer size={18}/> Print PDF</button>
+          <button onClick={handlePrint} className="btn-secondary flex items-center gap-2"><Printer size={18}/> Print PDF</button>
         </div>
       </div>
 

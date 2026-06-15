@@ -106,24 +106,6 @@ body {
 }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  /* Scoped print container for normal printing */
-  .print-container, .print-container * {
-    visibility: visible;
-  }
-  .print-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    box-shadow: none !important;
-    background: white !important;
-    color: black !important;
-    padding: 0 !important;
-  }
-
   /* Dedicated print layout for bills / quotations */
   body.printing-bill * {
     visibility: hidden;
@@ -133,6 +115,30 @@ body {
     visibility: visible;
   }
   body.printing-bill .print-bill-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
+  body.printing-bill .print-bill-container table,
+  body.printing-bill .print-bill-container th,
+  body.printing-bill .print-bill-container td {
+    border: 1px solid #000000 !important;
+  }
+
+  /* Dedicated print layout for labour register */
+  body.printing-labour * {
+    visibility: hidden;
+  }
+  body.printing-labour .print-labour-container,
+  body.printing-labour .print-labour-container * {
+    visibility: visible;
+  }
+  body.printing-labour .print-labour-container {
     position: absolute;
     left: 0;
     top: 0;

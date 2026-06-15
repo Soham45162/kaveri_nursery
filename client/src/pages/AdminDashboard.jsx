@@ -16,6 +16,15 @@ const emptyBillForm = {
   lines: [emptyBillLine]
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+};
+
 const emptyProjectForm = {
   title: '',
   category: 'Garden Design',
@@ -278,8 +287,10 @@ export default function AdminDashboard() {
     };
     try {
       const docRef = await addDoc(collection(db, 'bills'), billData);
-      setBills((current) => [{ id: docRef.id, ...billData }, ...current]);
+      const savedBill = { id: docRef.id, ...billData };
+      setBills((current) => [savedBill, ...current]);
       setBillForm(emptyBillForm);
+      setPreviewBill(savedBill);
     } catch (e) {
       console.error(e);
     }
@@ -696,121 +707,138 @@ export default function AdminDashboard() {
 
             {/* Scrollable Bill Content (What actually gets printed) */}
             <div className="max-h-[70vh] overflow-y-auto rounded-2xl bg-gray-50 p-4 dark:bg-black/20">
-              <div className="print-bill-container mx-auto max-w-[800px] border border-gray-200 bg-white p-8 font-sans text-black shadow-sm rounded-xl">
+              <div className="print-bill-container relative mx-auto max-w-[800px] border border-gray-300 bg-white p-8 font-sans text-black shadow-sm rounded-xl overflow-hidden min-h-[297mm]">
                 
-                {/* LETTERHEAD AREA */}
-                {letterheadType === 'digital' && (
-                  <div className="mb-6 border-b-2 border-green-800/20 pb-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <img 
-                          src="/images/kaveri_logo.jpeg" 
-                          alt="Kaveri Nursery Logo" 
-                          className="h-20 w-20 rounded-2xl object-cover border border-gray-200" 
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                        <div>
-                          <h1 className="font-serif text-3xl font-extrabold tracking-tight text-green-800" style={{ color: '#1b4332' }}>KAVERI NURSERY</h1>
-                          <p className="text-xs font-extrabold uppercase tracking-[0.25em] text-amber-800" style={{ color: '#9a3412' }}>And Garden Centre</p>
-                          <p className="mt-1 text-xs text-gray-500">Plants • Landscaping • Garden Design • Consultant</p>
-                        </div>
-                      </div>
-                      <div className="text-right text-xs text-gray-600 space-y-0.5">
-                        <p className="font-bold text-gray-800">Founder: Ramnath Kedar</p>
-                        <p>Phone: +91 9850779272</p>
-                        <p>Email: ramnathkedar@gmail.com</p>
-                        <p className="max-w-[250px] leading-relaxed">Manik Baug, Sinhagad Road, Pune - 411051</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {letterheadType === 'custom' && (
-                  <div className="mb-6">
-                    {customLetterheadUrl ? (
-                      <img src={customLetterheadUrl} alt="Custom Letterhead" className="w-full object-contain max-h-[160px] mx-auto rounded-lg" />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 py-10 bg-gray-50 rounded-xl">
-                        <p className="text-sm font-bold text-gray-500">No custom letterhead image uploaded yet.</p>
-                        <p className="text-xs text-gray-400 mt-1">Please use the Upload button above to add your header image.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {letterheadType === 'none' && (
-                  <div className="h-[60mm] flex items-center justify-center border border-dashed border-gray-200 mb-6 relative rounded-lg bg-gray-50/50">
-                    <span className="text-xs text-gray-300 select-none absolute top-2 left-2 font-mono">Blank Letterhead Space (60mm / 2.5")</span>
-                  </div>
-                )}
-
-                {/* INVOICE TITLE & METADATA */}
-                <div className="mb-6 flex justify-between items-start gap-4">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-tight text-gray-800 uppercase">
-                      {previewBill.type === 'Bill' ? 'Invoice' : 'Quotation'}
-                    </h2>
-                    <p className="text-sm font-semibold text-gray-600 mt-1">Number: {previewBill.number || 'DRAFT'}</p>
-                    <p className="text-sm text-gray-500">Date: {previewBill.date}</p>
-                  </div>
-                  <div className="text-right text-sm">
-                    <p className="font-semibold text-gray-500 uppercase tracking-wider text-xs">Bill To:</p>
-                    <p className="font-bold text-gray-900 text-base mt-0.5">{previewBill.customerName}</p>
-                    {previewBill.customerPhone && <p className="text-gray-600 mt-0.5">Phone: {previewBill.customerPhone}</p>}
-                  </div>
+                {/* Background Watermark */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.05] z-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="450" height="450" fill="none" stroke="#2d6f2c" strokeWidth="0.8">
+                    <path d="M50,90 C50,60 40,40 50,10 C53,30 65,35 60,45 C55,55 75,50 70,65 C65,80 55,85 50,90 Z" fill="#2d6f2c" fillOpacity="0.1" />
+                    <path d="M50,90 C50,60 60,40 50,10 C47,30 35,35 40,45 C45,55 25,50 30,65 C35,80 45,85 50,90 Z" fill="#2d6f2c" fillOpacity="0.1" />
+                    <circle cx="50" cy="35" r="15" stroke="#ef4444" strokeWidth="0.8" fill="#ef4444" fillOpacity="0.05" />
+                    <circle cx="45" cy="30" r="10" stroke="#ef4444" strokeWidth="0.8" fill="#ef4444" fillOpacity="0.05" />
+                    <circle cx="55" cy="30" r="10" stroke="#ef4444" strokeWidth="0.8" fill="#ef4444" fillOpacity="0.05" />
+                  </svg>
                 </div>
 
-                {/* INVOICE ITEMS TABLE */}
-                <table className="w-full border-collapse border border-gray-300 text-left text-sm mb-6">
-                  <thead>
-                    <tr className="bg-gray-100 text-gray-700 border-b border-gray-300 font-bold">
-                      <th className="border border-gray-300 p-2.5 w-12 text-center">#</th>
-                      <th className="border border-gray-300 p-2.5">Plant Name / Item</th>
-                      <th className="border border-gray-300 p-2.5 w-20 text-center">Qty</th>
-                      <th className="border border-gray-300 p-2.5 w-24 text-right">Rate (Rs.)</th>
-                      <th className="border border-gray-300 p-2.5 w-32 text-right">Amount (Rs.)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewBill.lines.map((line, idx) => (
-                      <tr key={idx} className="border-b border-gray-200">
-                        <td className="border border-gray-300 p-2 text-center text-gray-500">{idx + 1}</td>
-                        <td className="border border-gray-300 p-2 font-medium text-gray-800">{line.plantName}</td>
-                        <td className="border border-gray-300 p-2 text-center">{line.qty}</td>
-                        <td className="border border-gray-300 p-2 text-right">{Number(line.rate).toFixed(2)}</td>
-                        <td className="border border-gray-300 p-2 text-right font-bold text-gray-900">
-                          {(Number(line.qty) * Number(line.rate)).toFixed(2)}
+                <div className="relative z-10">
+                  {/* LETTERHEAD AREA */}
+                  {letterheadType === 'digital' && (
+                    <div className="mb-6 border-b border-gray-300 pb-4 flex items-center justify-start gap-6">
+                      <img 
+                        src="/images/kaveri_logo.jpeg" 
+                        alt="Kaveri Nursery Logo" 
+                        className="h-24 w-24 object-contain" 
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                      <div className="flex-1">
+                        <h1 className="text-4xl font-extrabold tracking-wide text-green-700 font-serif" style={{ color: '#2d6f2c', fontFamily: "'Playfair Display', serif" }}>
+                          Kaveri Nursery & Garden Centre
+                        </h1>
+                        <p className="text-sm font-bold mt-1 text-red-500" style={{ color: '#e11d48' }}>
+                          Mob. No. <span className="underline">9284771249</span> Email- <span className="underline">Kaverinursery@gmail.com</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {letterheadType === 'custom' && (
+                    <div className="mb-6">
+                      {customLetterheadUrl ? (
+                        <img src={customLetterheadUrl} alt="Custom Letterhead" className="w-full object-contain max-h-[160px] mx-auto rounded-lg" />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center border border-dashed border-gray-300 py-10 bg-gray-50 rounded-xl">
+                          <p className="text-sm font-bold text-gray-500">No custom letterhead image uploaded yet.</p>
+                          <p className="text-xs text-gray-400 mt-1">Please use the Upload button above to add your header image.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {letterheadType === 'none' && (
+                    <div className="h-[60mm] flex items-center justify-center border border-dashed border-gray-200 mb-6 relative rounded-lg bg-gray-50/50">
+                      <span className="text-xs text-gray-300 select-none absolute top-2 left-2 font-mono">Blank Letterhead Space (60mm / 2.5")</span>
+                    </div>
+                  )}
+
+                  {/* INVOICE TITLE & DATE */}
+                  <div className="relative text-center my-6">
+                    <h2 className="text-xl font-bold tracking-wider text-gray-800 uppercase">
+                      {previewBill.type}
+                    </h2>
+                    <div className="absolute right-0 top-0 text-sm font-bold text-gray-800">
+                      Date: {formatDate(previewBill.date)}
+                    </div>
+                  </div>
+
+                  {/* CUSTOMER INFO */}
+                  <div className="mb-6 text-left text-sm font-bold text-gray-800 space-y-1">
+                    <p className="text-gray-700">TO,</p>
+                    <p className="mt-1 text-base font-extrabold text-gray-900">{previewBill.customerName}</p>
+                    {previewBill.customerPhone && <p className="text-xs text-gray-600 font-normal">Phone: {previewBill.customerPhone}</p>}
+                  </div>
+
+                  {/* INVOICE ITEMS TABLE */}
+                  <table className="w-full border-collapse border border-black text-left text-sm mb-6">
+                    <thead>
+                      <tr className="bg-gray-50 text-black border-b border-black font-bold">
+                        <th className="border border-black p-2.5 w-14 text-center">Sr. No.</th>
+                        <th className="border border-black p-2.5">Plant Name</th>
+                        <th className="border border-black p-2.5 w-20 text-center">Qty</th>
+                        <th className="border border-black p-2.5 w-28 text-center">Rate</th>
+                        <th className="border border-black p-2.5 w-32 text-center">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewBill.lines.map((line, idx) => (
+                        <tr key={idx} className="border-b border-black">
+                          <td className="border border-black p-2 text-center">{idx + 1}</td>
+                          <td className="border border-black p-2 font-medium">{line.plantName}</td>
+                          <td className="border border-black p-2 text-center">{line.qty}</td>
+                          <td className="border border-black p-2 text-center">
+                            {Number(line.rate) % 1 === 0 ? `${Number(line.rate)}/-` : `${Number(line.rate).toFixed(2)}/-`}
+                          </td>
+                          <td className="border border-black p-2 text-center font-bold">
+                            {Number(line.qty * line.rate) % 1 === 0 
+                              ? `${Number(line.qty * line.rate)}/-` 
+                              : `${Number(line.qty * line.rate).toFixed(2)}/-`}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Grand Total Row */}
+                      <tr className="font-extrabold border-t border-black bg-gray-50">
+                        <td colSpan="2" className="border border-black p-2.5 text-right font-bold text-gray-800">Total Amount:</td>
+                        <td className="border border-black p-2.5 text-center font-bold">
+                          {previewBill.lines.reduce((sum, l) => sum + Number(l.qty || 0), 0)}
+                        </td>
+                        <td className="border border-black p-2.5 text-center"></td>
+                        <td className="border border-black p-2.5 text-center font-extrabold text-lg text-black">
+                          {Number(previewBill.total) % 1 === 0 
+                            ? `${Number(previewBill.total)}/-` 
+                            : `${Number(previewBill.total).toFixed(2)}/-`}
                         </td>
                       </tr>
-                    ))}
-                    {/* Grand Total Row */}
-                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-                      <td colSpan="3" className="border border-gray-300 p-2.5 text-right text-gray-600">Total Amount:</td>
-                      <td colSpan="2" className="border border-gray-300 p-2.5 text-right text-lg text-green-950 font-black">
-                        Rs. {Number(previewBill.total || previewBill.lines.reduce((sum, l) => sum + (Number(l.qty || 0)*Number(l.rate || 0)), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
 
-                {/* NOTES & TERMS */}
-                {previewBill.notes && (
-                  <div className="mb-8 p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs leading-relaxed text-gray-600">
-                    <p className="font-bold text-gray-700 mb-1">Notes / Terms & Conditions:</p>
-                    <p className="whitespace-pre-line">{previewBill.notes}</p>
-                  </div>
-                )}
+                  {/* NOTES & TERMS */}
+                  {previewBill.notes && (
+                    <div className="mb-6 p-4 bg-gray-50 border border-gray-300 rounded-lg text-xs leading-relaxed text-gray-600">
+                      <p className="font-bold text-gray-700 mb-1">Notes / Terms & Conditions:</p>
+                      <p className="whitespace-pre-line">{previewBill.notes}</p>
+                    </div>
+                  )}
 
-                {/* SIGNATURE SECTION */}
-                <div className="mt-12 flex justify-between items-end">
-                  <div className="text-xs text-gray-400">
-                    <p>Thank you for your business!</p>
-                    <p className="mt-1">For queries, call Founder: +91 9850779272</p>
-                  </div>
-                  <div className="text-center w-52">
-                    <div className="h-16 border-b border-gray-300 mb-2"></div>
-                    <p className="text-xs font-bold text-gray-800">For Kaveri Nursery</p>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Authorized Signatory</p>
+                  {/* SIGNATURE SECTION */}
+                  <div className="mt-12 flex justify-between items-end">
+                    <div className="text-xs text-gray-500">
+                      <p>Thank you for your business!</p>
+                      <p className="mt-1">For queries, call: 9284771249</p>
+                    </div>
+                    <div className="text-center w-52">
+                      <div className="h-16 border-b border-gray-300 mb-2"></div>
+                      <p className="text-xs font-bold text-gray-800">For Kaveri Nursery</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Authorized Signatory</p>
+                    </div>
                   </div>
                 </div>
 
