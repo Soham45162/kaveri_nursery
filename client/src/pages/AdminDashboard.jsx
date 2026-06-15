@@ -1,6 +1,6 @@
 import { BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, storage } from '../config/firebase.js';
@@ -43,6 +43,11 @@ export default function AdminDashboard() {
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [laboursCount, setLaboursCount] = useState(0);
+
+  const [previewBill, setPreviewBill] = useState(null);
+  const [letterheadType, setLetterheadType] = useState(() => localStorage.getItem('letterheadType') || 'digital');
+  const [customLetterheadUrl, setCustomLetterheadUrl] = useState(() => localStorage.getItem('customLetterheadUrl') || '');
+  const [uploadingLetterhead, setUploadingLetterhead] = useState(false);
 
   const addPlant = async (event) => {
     event.preventDefault();
@@ -108,6 +113,23 @@ export default function AdminDashboard() {
 
         const labSnap = await getDocs(collection(db, 'labours'));
         setLaboursCount(labSnap.size);
+
+        try {
+          const settingsSnap = await getDoc(doc(db, 'settings', 'billing'));
+          if (settingsSnap.exists()) {
+            const sData = settingsSnap.data();
+            if (sData.letterheadType) {
+              setLetterheadType(sData.letterheadType);
+              localStorage.setItem('letterheadType', sData.letterheadType);
+            }
+            if (sData.customLetterheadUrl) {
+              setCustomLetterheadUrl(sData.customLetterheadUrl);
+              localStorage.setItem('customLetterheadUrl', sData.customLetterheadUrl);
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to fetch settings from Firestore, using local fallback", err);
+        }
       } catch (error) {
         console.error("Error loading admin data", error);
       }
@@ -281,6 +303,37 @@ export default function AdminDashboard() {
     }
     return total;
   }, 0);
+
+  const saveLetterheadSettings = async (type, url = customLetterheadUrl) => {
+    setLetterheadType(type);
+    localStorage.setItem('letterheadType', type);
+    try {
+      await setDoc(doc(db, 'settings', 'billing'), {
+        letterheadType: type,
+        customLetterheadUrl: url
+      }, { merge: true });
+    } catch (e) {
+      console.error("Error saving settings to Firestore", e);
+    }
+  };
+
+  const handleLetterheadUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingLetterhead(true);
+    try {
+      const storageRef = ref(storage, `settings/letterhead-${Date.now()}`);
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      setCustomLetterheadUrl(downloadUrl);
+      localStorage.setItem('customLetterheadUrl', downloadUrl);
+      await saveLetterheadSettings(letterheadType, downloadUrl);
+    } catch (error) {
+      console.error("Error uploading letterhead image", error);
+    } finally {
+      setUploadingLetterhead(false);
+    }
+  };
 
   return (
     <main className="pt-24">
@@ -456,7 +509,20 @@ export default function AdminDashboard() {
               <div className="mt-5 flex flex-wrap gap-3">
                 <button type="button" onClick={addBillLine} className="btn-secondary"><Plus size={18} /> Add Item</button>
                 <button className="btn-primary"><FileText size={18} /> Save {billForm.type}</button>
-                <button type="button" onClick={() => window.print()} className="btn-secondary"><Printer size={18} /> Print</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const draftBill = {
+                      ...billForm,
+                      number: `${billForm.type === 'Bill' ? 'BILL' : 'QT'}-DRAFT`,
+                      total: billTotal,
+                    };
+                    setPreviewBill(draftBill);
+                  }} 
+                  className="btn-secondary"
+                >
+                  <Printer size={18} /> Preview & Print
+                </button>
               </div>
             </form>
 
@@ -476,7 +542,24 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span className="font-extrabold">Rs. {bill.total.toLocaleString()}</span>
-                        <button onClick={() => deleteBill(bill.id)} className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"><Trash2 size={14} /></button>
+                        <div className="flex gap-2">
+                          <button 
+                            type="button"
+                            onClick={() => setPreviewBill(bill)} 
+                            className="grid h-8 w-8 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200 dark:bg-leaf-800 dark:text-leaf-100"
+                            title="Preview & Print"
+                          >
+                            <Printer size={14} />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => deleteBill(bill.id)} 
+                            className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <p className="font-bold">{bill.customerName}</p>
@@ -555,6 +638,189 @@ export default function AdminDashboard() {
 
         </div>
       </section>
+
+      {/* Print Preview Modal */}
+      {previewBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 no-print">
+          <div className="relative w-full max-w-4xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10">
+            
+            {/* Modal Settings Bar */}
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-leaf-700/10 pb-4">
+              <div>
+                <h3 className="text-xl font-bold dark:text-white">Print Preview ({previewBill.type})</h3>
+                <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">Configure your print settings below</p>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold dark:text-leaf-200">Letterhead:</span>
+                  <select 
+                    value={letterheadType} 
+                    onChange={(e) => saveLetterheadSettings(e.target.value)}
+                    className="rounded-full border border-leaf-700/20 bg-transparent px-3 py-1.5 text-sm font-bold outline-none dark:text-white dark:bg-leaf-800"
+                  >
+                    <option value="digital">Digital (Logo & Details)</option>
+                    <option value="custom">Custom Image Banner</option>
+                    <option value="none">Blank (Pre-printed Paper)</option>
+                  </select>
+                </div>
+
+                {letterheadType === 'custom' && (
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-leaf-100 px-3 py-1.5 text-xs font-bold text-leaf-900 hover:bg-leaf-200 dark:bg-leaf-700 dark:text-white transition-colors">
+                    {uploadingLetterhead ? "Uploading..." : "Upload Banner"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLetterheadUpload} disabled={uploadingLetterhead} />
+                  </label>
+                )}
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    document.body.classList.add('printing-bill');
+                    window.print();
+                    document.body.classList.remove('printing-bill');
+                  }} 
+                  className="btn-primary py-2 px-5 text-sm"
+                >
+                  <Printer size={16} /> Print / Save PDF
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => setPreviewBill(null)} 
+                  className="btn-secondary py-2 px-5 text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Bill Content (What actually gets printed) */}
+            <div className="max-h-[70vh] overflow-y-auto rounded-2xl bg-gray-50 p-4 dark:bg-black/20">
+              <div className="print-bill-container mx-auto max-w-[800px] border border-gray-200 bg-white p-8 font-sans text-black shadow-sm rounded-xl">
+                
+                {/* LETTERHEAD AREA */}
+                {letterheadType === 'digital' && (
+                  <div className="mb-6 border-b-2 border-green-800/20 pb-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <img 
+                          src="/images/kaveri_logo.jpeg" 
+                          alt="Kaveri Nursery Logo" 
+                          className="h-20 w-20 rounded-2xl object-cover border border-gray-200" 
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                        <div>
+                          <h1 className="font-serif text-3xl font-extrabold tracking-tight text-green-800" style={{ color: '#1b4332' }}>KAVERI NURSERY</h1>
+                          <p className="text-xs font-extrabold uppercase tracking-[0.25em] text-amber-800" style={{ color: '#9a3412' }}>And Garden Centre</p>
+                          <p className="mt-1 text-xs text-gray-500">Plants • Landscaping • Garden Design • Consultant</p>
+                        </div>
+                      </div>
+                      <div className="text-right text-xs text-gray-600 space-y-0.5">
+                        <p className="font-bold text-gray-800">Founder: Ramnath Kedar</p>
+                        <p>Phone: +91 9850779272</p>
+                        <p>Email: ramnathkedar@gmail.com</p>
+                        <p className="max-w-[250px] leading-relaxed">Manik Baug, Sinhagad Road, Pune - 411051</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {letterheadType === 'custom' && (
+                  <div className="mb-6">
+                    {customLetterheadUrl ? (
+                      <img src={customLetterheadUrl} alt="Custom Letterhead" className="w-full object-contain max-h-[160px] mx-auto rounded-lg" />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 py-10 bg-gray-50 rounded-xl">
+                        <p className="text-sm font-bold text-gray-500">No custom letterhead image uploaded yet.</p>
+                        <p className="text-xs text-gray-400 mt-1">Please use the Upload button above to add your header image.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {letterheadType === 'none' && (
+                  <div className="h-[60mm] flex items-center justify-center border border-dashed border-gray-200 mb-6 relative rounded-lg bg-gray-50/50">
+                    <span className="text-xs text-gray-300 select-none absolute top-2 left-2 font-mono">Blank Letterhead Space (60mm / 2.5")</span>
+                  </div>
+                )}
+
+                {/* INVOICE TITLE & METADATA */}
+                <div className="mb-6 flex justify-between items-start gap-4">
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight text-gray-800 uppercase">
+                      {previewBill.type === 'Bill' ? 'Invoice' : 'Quotation'}
+                    </h2>
+                    <p className="text-sm font-semibold text-gray-600 mt-1">Number: {previewBill.number || 'DRAFT'}</p>
+                    <p className="text-sm text-gray-500">Date: {previewBill.date}</p>
+                  </div>
+                  <div className="text-right text-sm">
+                    <p className="font-semibold text-gray-500 uppercase tracking-wider text-xs">Bill To:</p>
+                    <p className="font-bold text-gray-900 text-base mt-0.5">{previewBill.customerName}</p>
+                    {previewBill.customerPhone && <p className="text-gray-600 mt-0.5">Phone: {previewBill.customerPhone}</p>}
+                  </div>
+                </div>
+
+                {/* INVOICE ITEMS TABLE */}
+                <table className="w-full border-collapse border border-gray-300 text-left text-sm mb-6">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-700 border-b border-gray-300 font-bold">
+                      <th className="border border-gray-300 p-2.5 w-12 text-center">#</th>
+                      <th className="border border-gray-300 p-2.5">Plant Name / Item</th>
+                      <th className="border border-gray-300 p-2.5 w-20 text-center">Qty</th>
+                      <th className="border border-gray-300 p-2.5 w-24 text-right">Rate (Rs.)</th>
+                      <th className="border border-gray-300 p-2.5 w-32 text-right">Amount (Rs.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewBill.lines.map((line, idx) => (
+                      <tr key={idx} className="border-b border-gray-200">
+                        <td className="border border-gray-300 p-2 text-center text-gray-500">{idx + 1}</td>
+                        <td className="border border-gray-300 p-2 font-medium text-gray-800">{line.plantName}</td>
+                        <td className="border border-gray-300 p-2 text-center">{line.qty}</td>
+                        <td className="border border-gray-300 p-2 text-right">{Number(line.rate).toFixed(2)}</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold text-gray-900">
+                          {(Number(line.qty) * Number(line.rate)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Grand Total Row */}
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                      <td colSpan="3" className="border border-gray-300 p-2.5 text-right text-gray-600">Total Amount:</td>
+                      <td colSpan="2" className="border border-gray-300 p-2.5 text-right text-lg text-green-950 font-black">
+                        Rs. {Number(previewBill.total || previewBill.lines.reduce((sum, l) => sum + (Number(l.qty || 0)*Number(l.rate || 0)), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* NOTES & TERMS */}
+                {previewBill.notes && (
+                  <div className="mb-8 p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs leading-relaxed text-gray-600">
+                    <p className="font-bold text-gray-700 mb-1">Notes / Terms & Conditions:</p>
+                    <p className="whitespace-pre-line">{previewBill.notes}</p>
+                  </div>
+                )}
+
+                {/* SIGNATURE SECTION */}
+                <div className="mt-12 flex justify-between items-end">
+                  <div className="text-xs text-gray-400">
+                    <p>Thank you for your business!</p>
+                    <p className="mt-1">For queries, call Founder: +91 9850779272</p>
+                  </div>
+                  <div className="text-center w-52">
+                    <div className="h-16 border-b border-gray-300 mb-2"></div>
+                    <p className="text-xs font-bold text-gray-800">For Kaveri Nursery</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Authorized Signatory</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }

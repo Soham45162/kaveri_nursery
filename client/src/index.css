@@ -109,6 +109,7 @@ body {
   body * {
     visibility: hidden;
   }
+  /* Scoped print container for normal printing */
   .print-container, .print-container * {
     visibility: visible;
   }
@@ -122,6 +123,26 @@ body {
     color: black !important;
     padding: 0 !important;
   }
+
+  /* Dedicated print layout for bills / quotations */
+  body.printing-bill * {
+    visibility: hidden;
+  }
+  body.printing-bill .print-bill-container,
+  body.printing-bill .print-bill-container * {
+    visibility: visible;
+  }
+  body.printing-bill .print-bill-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
+
   .no-print {
     display: none !important;
   }
@@ -136,7 +157,7 @@ body {
     print-color-adjust: exact !important;
   }
   @page {
-    size: landscape;
-    margin: 10mm;
+    size: auto;
+    margin: 12mm 15mm;
   }
 }
