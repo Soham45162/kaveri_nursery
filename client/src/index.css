@@ -109,11 +109,17 @@ body {
   /* Dedicated print layout for bills / quotations */
   body.printing-bill header,
   body.printing-bill footer,
-  body.printing-bill main > section {
+  body.printing-bill main > section,
+  body.printing-bill .section-pad,
+  html:has(.print-preview-modal) header,
+  html:has(.print-preview-modal) footer,
+  html:has(.print-preview-modal) main > section,
+  html:has(.print-preview-modal) .section-pad {
     display: none !important;
   }
 
-  body.printing-bill .print-preview-modal {
+  body.printing-bill .print-preview-modal,
+  html:has(.print-preview-modal) .print-preview-modal {
     position: static !important;
     display: block !important;
     background: transparent !important;
@@ -123,7 +129,8 @@ body {
     height: auto !important;
   }
 
-  body.printing-bill .print-preview-modal-content {
+  body.printing-bill .print-preview-modal-content,
+  html:has(.print-preview-modal) .print-preview-modal-content {
     box-shadow: none !important;
     border: none !important;
     background: white !important;
@@ -132,7 +139,8 @@ body {
     width: 100% !important;
   }
 
-  body.printing-bill .print-preview-scroll-wrapper {
+  body.printing-bill .print-preview-scroll-wrapper,
+  html:has(.print-preview-modal) .print-preview-scroll-wrapper {
     max-height: none !important;
     overflow: visible !important;
     background: transparent !important;
@@ -140,7 +148,8 @@ body {
     width: 100% !important;
   }
 
-  body.printing-bill .print-bill-container {
+  body.printing-bill .print-bill-container,
+  html:has(.print-preview-modal) .print-bill-container {
     position: relative !important;
     left: auto !important;
     top: auto !important;
@@ -155,8 +164,25 @@ body {
 
   body.printing-bill .print-bill-container table,
   body.printing-bill .print-bill-container th,
-  body.printing-bill .print-bill-container td {
+  body.printing-bill .print-bill-container td,
+  html:has(.print-preview-modal) .print-bill-container table,
+  html:has(.print-preview-modal) .print-bill-container th,
+  html:has(.print-preview-modal) .print-bill-container td {
     border: 1px solid #000000 !important;
+  }
+
+  /* Force light mode styles when printing in dark mode */
+  html.dark, html.dark body, body {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+  }
+
+  html.dark .print-bill-container,
+  html.dark .print-bill-container * {
+    color: black !important;
+    border-color: black !important;
+    background: white !important;
   }
 
   /* Dedicated print layout for labour attendance and payroll */

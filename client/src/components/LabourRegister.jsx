@@ -205,9 +205,11 @@ export default function LabourRegister() {
                 const isDark = document.documentElement.classList.contains('dark');
                 if (isDark) document.documentElement.classList.remove('dark');
                 document.body.classList.add('printing-labour');
-                window.print();
-                document.body.classList.remove('printing-labour');
-                if (isDark) document.documentElement.classList.add('dark');
+                setTimeout(() => {
+                  window.print();
+                  document.body.classList.remove('printing-labour');
+                  if (isDark) document.documentElement.classList.add('dark');
+                }, 50);
               }}
               className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >
@@ -326,9 +328,11 @@ export default function LabourRegister() {
                 const isDark = document.documentElement.classList.contains('dark');
                 if (isDark) document.documentElement.classList.remove('dark');
                 document.body.classList.add('printing-payroll');
-                window.print();
-                document.body.classList.remove('printing-payroll');
-                if (isDark) document.documentElement.classList.add('dark');
+                setTimeout(() => {
+                  window.print();
+                  document.body.classList.remove('printing-payroll');
+                  if (isDark) document.documentElement.classList.add('dark');
+                }, 50);
               }}
               className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >

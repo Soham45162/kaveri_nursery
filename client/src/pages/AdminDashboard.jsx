@@ -689,9 +689,11 @@ export default function AdminDashboard() {
                     const isDark = document.documentElement.classList.contains('dark');
                     if (isDark) document.documentElement.classList.remove('dark');
                     document.body.classList.add('printing-bill');
-                    window.print();
-                    document.body.classList.remove('printing-bill');
-                    if (isDark) document.documentElement.classList.add('dark');
+                    setTimeout(() => {
+                      window.print();
+                      document.body.classList.remove('printing-bill');
+                      if (isDark) document.documentElement.classList.add('dark');
+                    }, 50);
                   }} 
                   className="btn-primary py-2 px-5 text-sm"
                 >
