@@ -495,25 +495,25 @@ export default function LabourRegister() {
           <div className="flex items-center rounded-xl bg-leaf-50 p-1 dark:bg-leaf-900/80">
             <button 
               onClick={() => setActiveTab('directory')}
-              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'directory' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'directory' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-700 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
             >
               Directory
             </button>
             <button 
               onClick={() => setActiveTab('attendance')}
-              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'attendance' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'attendance' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-700 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
             >
               Attendance Grid
             </button>
             <button 
               onClick={() => setActiveTab('payroll')}
-              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'payroll' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'payroll' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-700 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
             >
               Payroll Ledger
             </button>
             <button 
               onClick={() => setActiveTab('reports')}
-              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-700 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
             >
               Reports Center
             </button>
@@ -557,7 +557,7 @@ export default function LabourRegister() {
                   placeholder="Enter worker full name" 
                   value={form.name} 
                   onChange={e => setForm({ ...form, name: e.target.value })} 
-                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                   required 
                 />
               </div>
@@ -568,7 +568,7 @@ export default function LabourRegister() {
                   <select 
                     value={form.skillType} 
                     onChange={e => setForm({ ...form, skillType: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
                   >
                     <option value="Gardener">Gardener</option>
                     <option value="Landscaper">Landscaper</option>
@@ -583,7 +583,7 @@ export default function LabourRegister() {
                     type="date" 
                     value={form.joiningDate} 
                     onChange={e => setForm({ ...form, joiningDate: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                   />
                 </div>
               </div>
@@ -597,7 +597,7 @@ export default function LabourRegister() {
                     placeholder="10-digit number" 
                     value={form.phone} 
                     onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -609,7 +609,7 @@ export default function LabourRegister() {
                     placeholder="12-digit number" 
                     value={form.aadhaar} 
                     onChange={e => setForm({ ...form, aadhaar: e.target.value.replace(/\D/g, '') })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -621,7 +621,7 @@ export default function LabourRegister() {
                   <select 
                     value={form.salaryType} 
                     onChange={e => setForm({ ...form, salaryType: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
                   >
                     <option value="daily">Daily Wage</option>
                     <option value="monthly">Monthly Salary</option>
@@ -634,7 +634,7 @@ export default function LabourRegister() {
                     placeholder="Wage rate" 
                     value={form.salaryRate} 
                     onChange={e => setForm({ ...form, salaryRate: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -647,7 +647,7 @@ export default function LabourRegister() {
                   value={form.address} 
                   onChange={e => setForm({ ...form, address: e.target.value })} 
                   rows="2"
-                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
                 />
               </div>
 
@@ -690,9 +690,9 @@ export default function LabourRegister() {
                           className="h-16 w-16 rounded-full object-cover border-2 border-leaf-500/30"
                         />
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-extrabold text-lg truncate">{labour.name}</h4>
+                          <h4 className="font-extrabold text-lg truncate text-leaf-900 dark:text-white">{labour.name}</h4>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                            <span className="inline-flex items-center gap-1 bg-leaf-100 text-leaf-800 px-2.5 py-0.5 rounded-full text-xxs font-extrabold dark:bg-leaf-800 dark:text-leaf-200">
+                            <span className="inline-flex items-center gap-1 bg-leaf-100 text-leaf-800 px-2.5 py-0.5 rounded-full text-xxs font-extrabold dark:bg-leaf-900 dark:text-leaf-100">
                               <Award size={10} /> {labour.skillType || labour.role || 'Gardener'}
                             </span>
                             <span className="inline-flex items-center bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full text-xxs font-bold dark:bg-leaf-900 dark:text-leaf-300">
@@ -704,28 +704,28 @@ export default function LabourRegister() {
 
                       {/* Detail Fields */}
                       <div className="mt-4 pt-3 border-t border-leaf-700/5 space-y-2 text-xs">
-                        <div className="flex items-center gap-2 text-gray-600 dark:text-leaf-350">
-                          <Phone size={13} className="text-leaf-600 shrink-0" />
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-leaf-300">
+                          <Phone size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0" />
                           <span>{labour.phone || 'No Mobile'}</span>
                         </div>
-                        <div className="flex items-center justify-between text-gray-600 dark:text-leaf-350">
+                        <div className="flex items-center justify-between text-gray-600 dark:text-leaf-300">
                           <div className="flex items-center gap-2">
-                            <CreditCard size={13} className="text-leaf-600 shrink-0" />
+                            <CreditCard size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0" />
                             <span>Aadhaar: {getAadhaarDisplay(labour.id, labour.aadhaar)}</span>
                           </div>
                           <button 
                             onClick={() => toggleAadhaarMask(labour.id)}
-                            className="text-xxs font-bold text-leaf-600 hover:underline inline-flex items-center gap-0.5 shrink-0"
+                            className="text-xxs font-bold text-leaf-600 dark:text-leaf-300 hover:underline inline-flex items-center gap-0.5 shrink-0"
                           >
                             {unmaskedAadhaarIds[labour.id] ? <EyeOff size={10} /> : <Eye size={10} />}
                             {unmaskedAadhaarIds[labour.id] ? 'Hide' : 'Reveal'}
                           </button>
                         </div>
-                        <div className="flex items-start gap-2 text-gray-600 dark:text-leaf-350">
-                          <MapPin size={13} className="text-leaf-600 shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 text-gray-600 dark:text-leaf-300">
+                          <MapPin size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0 mt-0.5" />
                           <span className="line-clamp-2 leading-relaxed">{labour.address || 'Address not listed'}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-500 text-xxs">
+                        <div className="flex items-center gap-2 text-gray-500 dark:text-leaf-300 text-xxs">
                           <Calendar size={11} className="text-leaf-500" />
                           <span>Joined: {labour.joiningDate ? new Date(labour.joiningDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</span>
                         </div>
@@ -1443,7 +1443,7 @@ export default function LabourRegister() {
                   type="text" 
                   value={editingLabour.name} 
                   onChange={e => setEditingLabour({ ...editingLabour, name: e.target.value })} 
-                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                   required 
                 />
               </div>
@@ -1454,7 +1454,7 @@ export default function LabourRegister() {
                   <select 
                     value={editingLabour.skillType || editingLabour.role || 'Gardener'} 
                     onChange={e => setEditingLabour({ ...editingLabour, skillType: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
                   >
                     <option value="Gardener">Gardener</option>
                     <option value="Landscaper">Landscaper</option>
@@ -1469,7 +1469,7 @@ export default function LabourRegister() {
                     type="date" 
                     value={editingLabour.joiningDate || ''} 
                     onChange={e => setEditingLabour({ ...editingLabour, joiningDate: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                   />
                 </div>
               </div>
@@ -1482,7 +1482,7 @@ export default function LabourRegister() {
                     maxLength="10"
                     value={editingLabour.phone || ''} 
                     onChange={e => setEditingLabour({ ...editingLabour, phone: e.target.value.replace(/\D/g, '') })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -1493,7 +1493,7 @@ export default function LabourRegister() {
                     maxLength="12"
                     value={editingLabour.aadhaar || ''} 
                     onChange={e => setEditingLabour({ ...editingLabour, aadhaar: e.target.value.replace(/\D/g, '') })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -1505,7 +1505,7 @@ export default function LabourRegister() {
                   <select 
                     value={editingLabour.salaryType || 'daily'} 
                     onChange={e => setEditingLabour({ ...editingLabour, salaryType: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
                   >
                     <option value="daily">Daily Wage</option>
                     <option value="monthly">Monthly Salary</option>
@@ -1517,7 +1517,7 @@ export default function LabourRegister() {
                     type="number" 
                     value={editingLabour.salaryRate || ''} 
                     onChange={e => setEditingLabour({ ...editingLabour, salaryRate: e.target.value })} 
-                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
                     required 
                   />
                 </div>
@@ -1529,7 +1529,7 @@ export default function LabourRegister() {
                   value={editingLabour.address || ''} 
                   onChange={e => setEditingLabour({ ...editingLabour, address: e.target.value })} 
                   rows="2"
-                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
                 />
               </div>
 
