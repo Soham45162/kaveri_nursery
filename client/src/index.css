@@ -242,4 +242,24 @@ body {
     size: auto;
     margin: 12mm 15mm;
   }
+
+  /* Print Salary Slip Overrides */
+  body.printing-slip #root,
+  body.printing-slip header,
+  body.printing-slip footer,
+  body.printing-slip main,
+  body.printing-slip .no-print {
+    display: none !important;
+  }
+
+  body.printing-slip .print-slip-only {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 }
