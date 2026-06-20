@@ -469,7 +469,7 @@ export default function LabourRegister() {
   };
 
   return (
-    <div className="rounded-[2.5rem] bg-white p-6 shadow-xl border border-leaf-700/5 dark:bg-leaf-950/40">
+    <div className="rounded-[2.5rem] bg-white p-6 shadow-xl border border-leaf-700/5 dark:bg-leaf-900/60 dark:border-leaf-700/15">
       
       {/* Tab Navigation header */}
       <div className="no-print mb-8 flex flex-col justify-between gap-5 border-b border-leaf-700/10 pb-5 lg:flex-row lg:items-center">
@@ -744,11 +744,11 @@ export default function LabourRegister() {
                         {expandedHistoryIds[labour.id] && (
                           <div className="mt-2 p-2 bg-gray-50 dark:bg-leaf-900/60 rounded-lg text-xxs space-y-1 max-h-24 overflow-y-auto border border-leaf-700/5">
                             {(!labour.dailyWageHistory || labour.dailyWageHistory.length === 0) ? (
-                              <p className="text-gray-400 italic">No wage change log recorded.</p>
+                              <p className="text-gray-400 dark:text-leaf-300/60 italic">No wage change log recorded.</p>
                             ) : (
                               [...labour.dailyWageHistory].reverse().map((entry, idx) => (
-                                <div key={idx} className="flex justify-between border-b border-gray-150 dark:border-leaf-800 pb-1 last:border-0 last:pb-0">
-                                  <span className="text-gray-500">{entry.date}</span>
+                                <div key={idx} className="flex justify-between border-b border-gray-200 dark:border-leaf-800 pb-1 last:border-0 last:pb-0">
+                                  <span className="text-gray-500 dark:text-leaf-300">{entry.date}</span>
                                   <strong className="text-leaf-900 dark:text-leaf-100">₹{entry.rate}</strong>
                                 </div>
                               ))
@@ -791,7 +791,7 @@ export default function LabourRegister() {
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <Calendar className="text-leaf-600" /> Attendance Spreadsheet Grid
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Click cells: [F]ull Day → [H]alf Day → [A]bsent → [Clear]. Saves automatically.</p>
+              <p className="text-xs text-gray-500 dark:text-leaf-300 mt-0.5">Click cells: [F]ull Day → [H]alf Day → [A]bsent → [Clear]. Saves automatically.</p>
             </div>
             
             <button 
@@ -883,7 +883,7 @@ export default function LabourRegister() {
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <DollarSign className="text-leaf-600" /> Payroll & Payments Sheet
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Automated payroll, attendance deductions, advances deduction, and payment actions.</p>
+              <p className="text-xs text-gray-500 dark:text-leaf-300 mt-0.5">Automated payroll, attendance deductions, advances deduction, and payment actions.</p>
             </div>
             
             <button 
@@ -1008,7 +1008,7 @@ export default function LabourRegister() {
                               setViewingHistoryLabourId(labour.id);
                               setHistoryTab('payments');
                             }}
-                            className="inline-flex items-center gap-0.5 bg-gray-100 hover:bg-gray-250 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 py-1 px-2 rounded-lg text-xxs transition-colors"
+                            className="inline-flex items-center gap-0.5 bg-gray-100 hover:bg-gray-200 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 py-1 px-2 rounded-lg text-xxs transition-colors"
                           >
                             <History size={10} /> Logs
                           </button>
@@ -1059,7 +1059,7 @@ export default function LabourRegister() {
           </div>
 
           {/* Printable Report Sheet */}
-          <div className="glass rounded-[2rem] p-6 border border-leaf-700/10 bg-white text-black dark:text-black">
+          <div className="glass rounded-[2rem] p-6 border border-leaf-700/10 bg-white text-leaf-900 dark:text-leaf-100">
             
             {/* Header section */}
             <div className="text-center border-b pb-5 mb-6">
@@ -1080,7 +1080,7 @@ export default function LabourRegister() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                    <tr className="border-b-2 border-gray-300 dark:border-leaf-800 bg-gray-50 dark:bg-leaf-900/40 text-gray-700 dark:text-leaf-300 font-bold uppercase">
                       <th className="p-3">Worker Name</th>
                       <th className="p-3">Skill Category</th>
                       <th className="p-3 text-center">Full Days (F)</th>
@@ -1093,21 +1093,21 @@ export default function LabourRegister() {
                   <tbody>
                     {labours.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="p-4 text-center text-gray-500">No attendance reports available.</td>
+                        <td colSpan="7" className="p-4 text-center text-gray-500 dark:text-leaf-300">No attendance reports available.</td>
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
                       const workedDays = totals.full + 0.5 * totals.half;
                       const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
                       return (
-                        <tr key={labour.id} className="border-b border-gray-200">
+                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
                           <td className="p-3 font-bold">{labour.name}</td>
                           <td className="p-3">{labour.skillType || labour.role || 'Gardener'}</td>
-                          <td className="p-3 text-center text-green-700 font-semibold">{totals.full}</td>
-                          <td className="p-3 text-center text-amber-600 font-semibold">{totals.half}</td>
-                          <td className="p-3 text-center text-red-600 font-semibold">{totals.absent}</td>
+                          <td className="p-3 text-center text-green-700 dark:text-green-400 font-semibold">{totals.full}</td>
+                          <td className="p-3 text-center text-amber-600 dark:text-amber-300 font-semibold">{totals.half}</td>
+                          <td className="p-3 text-center text-red-600 dark:text-red-400 font-semibold">{totals.absent}</td>
                           <td className="p-3 text-center font-bold">{workedDays} Days</td>
-                          <td className="p-3 text-right font-extrabold text-gray-800">{attendancePercent}%</td>
+                          <td className="p-3 text-right font-extrabold text-gray-800 dark:text-leaf-100">{attendancePercent}%</td>
                         </tr>
                       );
                     })}
@@ -1121,23 +1121,23 @@ export default function LabourRegister() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                    <tr className="border-b-2 border-gray-300 dark:border-leaf-800 bg-gray-50 dark:bg-leaf-900/40 text-gray-700 dark:text-leaf-300 font-bold uppercase">
                       <th className="p-3">Worker Name</th>
                       <th className="p-3">Rate Config</th>
                       <th className="p-3 text-center">Worked Days</th>
                       <th className="p-3 text-right">Gross Salary</th>
-                      <th className="p-3 text-right text-red-600">Absent Cuts</th>
-                      <th className="p-3 text-right text-green-700">Net Earned</th>
-                      <th className="p-3 text-right text-amber-600">Advances</th>
+                      <th className="p-3 text-right text-red-600 dark:text-red-400">Absent Cuts</th>
+                      <th className="p-3 text-right text-green-700 dark:text-green-400">Net Earned</th>
+                      <th className="p-3 text-right text-amber-600 dark:text-amber-300">Advances</th>
                       <th className="p-3 text-right font-extrabold">Net Payable</th>
-                      <th className="p-3 text-right text-gray-800">Amount Paid</th>
+                      <th className="p-3 text-right text-gray-800 dark:text-leaf-100">Amount Paid</th>
                       <th className="p-3 text-right">Balance Due</th>
                     </tr>
                   </thead>
                   <tbody>
                     {labours.length === 0 ? (
                       <tr>
-                        <td colSpan="10" className="p-4 text-center text-gray-500">No salary reports available.</td>
+                        <td colSpan="10" className="p-4 text-center text-gray-500 dark:text-leaf-300">No salary reports available.</td>
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
@@ -1168,22 +1168,22 @@ export default function LabourRegister() {
                       const balanceDue = netPayable - totalPaid;
                       
                       return (
-                        <tr key={labour.id} className="border-b border-gray-200">
+                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
                           <td className="p-3 font-bold">
                             {labour.name}
-                            <span className="block text-xxs font-normal text-gray-400">{labour.skillType || labour.role || 'Gardener'}</span>
+                            <span className="block text-xxs font-normal text-gray-400 dark:text-leaf-300/60">{labour.skillType || labour.role || 'Gardener'}</span>
                           </td>
                           <td className="p-3">
                             ₹{salaryRate}/{salaryType === 'monthly' ? 'm' : 'd'}
                           </td>
                           <td className="p-3 text-center font-bold">{workedDays} Days</td>
                           <td className="p-3 text-right">₹{grossSalary.toLocaleString()}</td>
-                          <td className="p-3 text-right text-red-650 font-semibold">-₹{salaryCut.toLocaleString()}</td>
-                          <td className="p-3 text-right text-green-700 font-semibold">₹{netSalary.toLocaleString()}</td>
-                          <td className="p-3 text-right text-amber-600 font-semibold">₹{totalAdvance.toLocaleString()}</td>
+                          <td className="p-3 text-right text-red-600 dark:text-red-400 font-semibold">-₹{salaryCut.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-700 dark:text-green-400 font-semibold">₹{netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-right text-amber-600 dark:text-amber-300 font-semibold">₹{totalAdvance.toLocaleString()}</td>
                           <td className="p-3 text-right font-extrabold">₹{netPayable.toLocaleString()}</td>
-                          <td className="p-3 text-right text-gray-700">₹{totalPaid.toLocaleString()}</td>
-                          <td className="p-3 text-right font-extrabold text-blue-700">₹{balanceDue.toLocaleString()}</td>
+                          <td className="p-3 text-right text-gray-700 dark:text-leaf-200">₹{totalPaid.toLocaleString()}</td>
+                          <td className="p-3 text-right font-extrabold text-blue-700 dark:text-blue-300">₹{balanceDue.toLocaleString()}</td>
                         </tr>
                       );
                     })}
@@ -1197,7 +1197,7 @@ export default function LabourRegister() {
               <div>
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                    <tr className="border-b-2 border-gray-300 dark:border-leaf-800 bg-gray-50 dark:bg-leaf-900/40 text-gray-700 dark:text-leaf-300 font-bold uppercase">
                       <th className="p-3 w-32">Date Given</th>
                       <th className="p-3">Worker Name</th>
                       <th className="p-3">Skill Category</th>
@@ -1222,7 +1222,7 @@ export default function LabourRegister() {
                       if (allTx.length === 0) {
                         return (
                           <tr>
-                            <td colSpan="5" className="p-4 text-center text-gray-500">No salary advances recorded for this month.</td>
+                            <td colSpan="5" className="p-4 text-center text-gray-500 dark:text-leaf-300">No salary advances recorded for this month.</td>
                           </tr>
                         );
                       }
@@ -1233,17 +1233,17 @@ export default function LabourRegister() {
                       return (
                         <>
                           {sorted.map(entry => (
-                            <tr key={entry.id} className="border-b border-gray-200">
+                            <tr key={entry.id} className="border-b border-gray-200 dark:border-leaf-800/40">
                               <td className="p-3">{entry.date}</td>
                               <td className="p-3 font-bold">{entry.workerName}</td>
                               <td className="p-3">{entry.workerSkill}</td>
-                              <td className="p-3 italic text-gray-650">{entry.notes}</td>
-                              <td className="p-3 text-right font-bold text-amber-600">₹{entry.amount.toLocaleString()}</td>
+                              <td className="p-3 italic text-gray-600 dark:text-leaf-300">{entry.notes}</td>
+                              <td className="p-3 text-right font-bold text-amber-600 dark:text-amber-300">₹{entry.amount.toLocaleString()}</td>
                             </tr>
                           ))}
-                          <tr className="bg-gray-150 font-extrabold text-sm border-t-2 border-gray-400">
+                          <tr className="bg-gray-100 dark:bg-leaf-900/40 font-extrabold text-sm border-t-2 border-gray-400 dark:border-leaf-700">
                             <td className="p-3 text-right" colSpan="4">GRAND TOTAL ADVANCES:</td>
-                            <td className="p-3 text-right text-amber-700">₹{totalSum.toLocaleString()}</td>
+                            <td className="p-3 text-right text-amber-700 dark:text-amber-300">₹{totalSum.toLocaleString()}</td>
                           </tr>
                         </>
                       );
@@ -1258,7 +1258,7 @@ export default function LabourRegister() {
               <div>
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                    <tr className="border-b-2 border-gray-300 dark:border-leaf-800 bg-gray-50 dark:bg-leaf-900/40 text-gray-700 dark:text-leaf-300 font-bold uppercase">
                       <th className="p-3 w-32">Disbursement Date</th>
                       <th className="p-3">Worker Name</th>
                       <th className="p-3">Skill Category</th>
@@ -1283,7 +1283,7 @@ export default function LabourRegister() {
                       if (allTx.length === 0) {
                         return (
                           <tr>
-                            <td colSpan="5" className="p-4 text-center text-gray-500">No salary payment disbursements found for this month.</td>
+                            <td colSpan="5" className="p-4 text-center text-gray-500 dark:text-leaf-300">No salary payment disbursements found for this month.</td>
                           </tr>
                         );
                       }
@@ -1294,17 +1294,17 @@ export default function LabourRegister() {
                       return (
                         <>
                           {sorted.map(entry => (
-                            <tr key={entry.id} className="border-b border-gray-200">
+                            <tr key={entry.id} className="border-b border-gray-200 dark:border-leaf-800/40">
                               <td className="p-3">{entry.date}</td>
                               <td className="p-3 font-bold">{entry.workerName}</td>
                               <td className="p-3">{entry.workerSkill}</td>
-                              <td className="p-3 italic text-gray-650">{entry.notes}</td>
-                              <td className="p-3 text-right font-bold text-green-700">₹{entry.amount.toLocaleString()}</td>
+                              <td className="p-3 italic text-gray-600 dark:text-leaf-300">{entry.notes}</td>
+                              <td className="p-3 text-right font-bold text-green-700 dark:text-green-400">₹{entry.amount.toLocaleString()}</td>
                             </tr>
                           ))}
-                          <tr className="bg-gray-150 font-extrabold text-sm border-t-2 border-gray-400">
+                          <tr className="bg-gray-100 dark:bg-leaf-900/40 font-extrabold text-sm border-t-2 border-gray-400 dark:border-leaf-700">
                             <td className="p-3 text-right" colSpan="4">GRAND TOTAL DISBURSED:</td>
-                            <td className="p-3 text-right text-green-800">₹{totalSum.toLocaleString()}</td>
+                            <td className="p-3 text-right text-green-800 dark:text-leaf-200">₹{totalSum.toLocaleString()}</td>
                           </tr>
                         </>
                       );
@@ -1319,7 +1319,7 @@ export default function LabourRegister() {
               <div>
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                    <tr className="border-b-2 border-gray-300 dark:border-leaf-800 bg-gray-50 dark:bg-leaf-900/40 text-gray-700 dark:text-leaf-300 font-bold uppercase">
                       <th className="p-3">Worker Photo & Name</th>
                       <th className="p-3">Skill Category</th>
                       <th className="p-3 text-center">Days Worked (F + 0.5*H)</th>
@@ -1331,7 +1331,7 @@ export default function LabourRegister() {
                   <tbody>
                     {labours.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="p-4 text-center text-gray-500">No worker performance records available.</td>
+                        <td colSpan="6" className="p-4 text-center text-gray-500 dark:text-leaf-300">No worker performance records available.</td>
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
@@ -1350,24 +1350,24 @@ export default function LabourRegister() {
                       const rating = getPerformanceRating(workedDays);
 
                       return (
-                        <tr key={labour.id} className="border-b border-gray-200">
+                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
                           <td className="p-3">
                             <div className="flex items-center gap-3">
                               <img 
-                                src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                                src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80'} 
                                 alt={labour.name} 
-                                className="h-10 w-10 rounded-full object-cover border"
+                                className="h-8 w-8 rounded-full object-cover border border-leaf-700/10"
                               />
                               <div>
-                                <strong className="text-gray-900 block">{labour.name}</strong>
-                                <span className="text-xxs text-gray-500">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
+                                <strong className="text-gray-900 dark:text-leaf-100 block">{labour.name}</strong>
+                                <span className="text-xxs text-gray-500 dark:text-leaf-300/60">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
                               </div>
                             </div>
                           </td>
                           <td className="p-3 font-semibold">{labour.skillType || labour.role || 'Gardener'}</td>
                           <td className="p-3 text-center font-bold">{workedDays} / {daysInMonth} Days</td>
-                          <td className="p-3 text-center font-extrabold text-blue-700">{attendancePercent}%</td>
-                          <td className="p-3 text-right font-extrabold text-green-700">₹{netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-center font-extrabold text-blue-700 dark:text-blue-300">{attendancePercent}%</td>
+                          <td className="p-3 text-right font-extrabold text-green-700 dark:text-green-400">₹{netSalary.toLocaleString()}</td>
                           <td className="p-3 text-center">
                             <span className={`inline-block px-3 py-1 rounded-full text-xxs font-extrabold uppercase ${rating.style}`}>
                               {rating.label}
@@ -1562,19 +1562,19 @@ export default function LabourRegister() {
               <h3 className="text-xl font-extrabold flex items-center gap-2"><DollarSign size={20} className="text-green-600" /> Record Wage Payment</h3>
               <button onClick={() => setPayingLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Record a salary payment for <strong>{labours.find(l => l.id === payingLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 dark:text-leaf-300/80 mb-4">Record a salary payment for <strong>{labours.find(l => l.id === payingLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
             
             <form onSubmit={recordPayment} className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Payment Date</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Payment Date</label>
                 <input type="date" value={payForm.date} onChange={e=>setPayForm({...payForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Disbursed Amount (₹)</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Disbursed Amount (₹)</label>
                 <input type="number" value={payForm.amount} onChange={e=>setPayForm({...payForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="Enter amount paid" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Remarks / Notes</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Remarks / Notes</label>
                 <input value={payForm.notes} onChange={e=>setPayForm({...payForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="e.g. UPI, Cash, Final Settlement" />
               </div>
               <div className="mt-6 flex justify-end gap-3 border-t pt-4">
@@ -1594,19 +1594,19 @@ export default function LabourRegister() {
               <h3 className="text-xl font-extrabold flex items-center gap-2 text-amber-600"><Coins size={20} /> Record Salary Advance</h3>
               <button onClick={() => setRecordingAdvanceLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Record a wage advance given to <strong>{labours.find(l => l.id === recordingAdvanceLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 dark:text-leaf-300/80 mb-4">Record a wage advance given to <strong>{labours.find(l => l.id === recordingAdvanceLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
             
             <form onSubmit={recordAdvance} className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Advance Date</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Advance Date</label>
                 <input type="date" value={advanceForm.date} onChange={e=>setAdvanceForm({...advanceForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Advance Amount (₹)</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Advance Amount (₹)</label>
                 <input type="number" value={advanceForm.amount} onChange={e=>setAdvanceForm({...advanceForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="Enter advance amount" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">Notes / Purpose *</label>
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Notes / Purpose *</label>
                 <input value={advanceForm.notes} onChange={e=>setAdvanceForm({...advanceForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="e.g. Festival advance, Medical needs" required />
               </div>
               <div className="mt-6 flex justify-end gap-3 border-t pt-4">
@@ -1626,7 +1626,7 @@ export default function LabourRegister() {
               <h3 className="text-xl font-extrabold flex items-center gap-2"><History size={20} className="text-leaf-600" /> Transaction Ledger Logs</h3>
               <button onClick={() => setViewingHistoryLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Transactions for <strong>{labours.find(l => l.id === viewingHistoryLabourId)?.name}</strong> in {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 dark:text-leaf-300/80 mb-4">Transactions for <strong>{labours.find(l => l.id === viewingHistoryLabourId)?.name}</strong> in {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
             
             {/* Tabs Header */}
             <div className="flex border-b border-leaf-700/10 mb-4">
@@ -1649,13 +1649,13 @@ export default function LabourRegister() {
             <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
               {historyTab === 'payments' ? (
                 !payments[viewingHistoryLabourId] || payments[viewingHistoryLabourId].length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-6 italic">No payment logs found for this month.</p>
+                  <p className="text-xs text-gray-400 dark:text-leaf-300/60 text-center py-6 italic">No payment logs found for this month.</p>
                 ) : (
                   payments[viewingHistoryLabourId].map((tx) => (
                     <div key={tx.id} className="flex justify-between items-center bg-green-50/40 p-3 rounded-xl border border-green-700/5 dark:bg-green-950/10">
                       <div>
                         <p className="font-extrabold text-sm text-green-700 dark:text-green-400">₹{tx.amount}</p>
-                        <p className="text-xxs text-gray-500 mt-0.5">{tx.date} · {tx.notes}</p>
+                        <p className="text-xxs text-gray-500 dark:text-leaf-300/70 mt-0.5">{tx.date} · {tx.notes}</p>
                       </div>
                       <button 
                         onClick={() => deletePayment(viewingHistoryLabourId, tx.id)}
@@ -1668,13 +1668,13 @@ export default function LabourRegister() {
                 )
               ) : (
                 !advances[viewingHistoryLabourId] || advances[viewingHistoryLabourId].length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-6 italic">No advance logs found for this month.</p>
+                  <p className="text-xs text-gray-400 dark:text-leaf-300/60 text-center py-6 italic">No advance logs found for this month.</p>
                 ) : (
                   advances[viewingHistoryLabourId].map((tx) => (
                     <div key={tx.id} className="flex justify-between items-center bg-amber-50/40 p-3 rounded-xl border border-amber-700/5 dark:bg-amber-950/10">
                       <div>
                         <p className="font-extrabold text-sm text-amber-700 dark:text-amber-400">₹{tx.amount}</p>
-                        <p className="text-xxs text-gray-500 mt-0.5">{tx.date} · {tx.notes}</p>
+                        <p className="text-xxs text-gray-500 dark:text-leaf-300/70 mt-0.5">{tx.date} · {tx.notes}</p>
                       </div>
                       <button 
                         onClick={() => deleteAdvance(viewingHistoryLabourId, tx.id)}
