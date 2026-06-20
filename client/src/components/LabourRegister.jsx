@@ -1,25 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { UserPlus, Trash2, Edit, DollarSign, History, X, Check, Printer, Coins, FileText } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../config/firebase';
+import { 
+  UserPlus, Trash2, Edit, DollarSign, History, X, Check, Printer, 
+  Coins, FileText, Upload, Calendar, Award, MapPin, Phone, 
+  CreditCard, Eye, EyeOff, Search, FileSpreadsheet, Sparkles 
+} from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 export default function LabourRegister() {
+  // Main Data States
   const [labours, setLabours] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [payments, setPayments] = useState({});
   const [advances, setAdvances] = useState({});
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  const [form, setForm] = useState({ name: '', role: '', phone: '', salaryType: 'daily', salaryRate: '' });
+  const [uploading, setUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // UI Views State
+  const [activeTab, setActiveTab] = useState('directory'); // 'directory', 'attendance', 'payroll', 'reports'
+  const [reportType, setReportType] = useState('attendance'); // 'attendance', 'salary', 'advance', 'payments', 'performance'
+
+  // Forms States
+  const [form, setForm] = useState({
+    name: '',
+    skillType: 'Gardener',
+    phone: '',
+    aadhaar: '',
+    address: '',
+    joiningDate: new Date().toISOString().slice(0, 10),
+    salaryType: 'daily',
+    salaryRate: '',
+    photoFile: null,
+    photoPreview: ''
+  });
+
   const [editingLabour, setEditingLabour] = useState(null);
   const [payingLabourId, setPayingLabourId] = useState(null);
   const [recordingAdvanceLabourId, setRecordingAdvanceLabourId] = useState(null);
+  
   const [payForm, setPayForm] = useState({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
   const [advanceForm, setAdvanceForm] = useState({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+  
   const [viewingHistoryLabourId, setViewingHistoryLabourId] = useState(null);
   const [historyTab, setHistoryTab] = useState('payments'); // 'payments' or 'advances'
   const [viewingSlipLabour, setViewingSlipLabour] = useState(null);
+  
+  // Custom states for UI features
+  const [unmaskedAadhaarIds, setUnmaskedAadhaarIds] = useState({});
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState({});
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -33,67 +64,234 @@ export default function LabourRegister() {
   }, [monthKey]);
 
   const fetchData = async () => {
-    const labSnap = await getDocs(collection(db, 'labours'));
-    setLabours(labSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    try {
+      const labSnap = await getDocs(collection(db, 'labours'));
+      setLabours(labSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-    const attSnap = await getDoc(doc(db, 'attendance', monthKey));
-    if (attSnap.exists()) {
-      setAttendance(attSnap.data());
-    } else {
-      setAttendance({});
-    }
+      const attSnap = await getDoc(doc(db, 'attendance', monthKey));
+      setAttendance(attSnap.exists() ? attSnap.data() : {});
 
-    const paySnap = await getDoc(doc(db, 'payments', monthKey));
-    if (paySnap.exists()) {
-      setPayments(paySnap.data());
-    } else {
-      setPayments({});
-    }
+      const paySnap = await getDoc(doc(db, 'payments', monthKey));
+      setPayments(paySnap.exists() ? paySnap.data() : {});
 
-    const advSnap = await getDoc(doc(db, 'advances', monthKey));
-    if (advSnap.exists()) {
-      setAdvances(advSnap.data());
-    } else {
-      setAdvances({});
+      const advSnap = await getDoc(doc(db, 'advances', monthKey));
+      setAdvances(advSnap.exists() ? advSnap.data() : {});
+    } catch (err) {
+      console.error("Error fetching payroll data:", err);
     }
   };
 
+  // Form Input Photo Handlers
+  const handlePhotoSelect = (e, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const previewUrl = URL.createObjectURL(file);
+    if (isEdit) {
+      setEditingLabour(prev => ({ ...prev, photoFile: file, photoPreview: previewUrl }));
+    } else {
+      setForm(prev => ({ ...prev, photoFile: file, photoPreview: previewUrl }));
+    }
+  };
+
+  // Create Labourer (Add worker)
   const addLabour = async (e) => {
     e.preventDefault();
-    if (!form.name) return;
+    if (!form.name || !form.phone || !form.aadhaar || !form.salaryRate) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(form.phone)) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    if (!/^\d{12}$/.test(form.aadhaar)) {
+      alert("Please enter a valid 12-digit Aadhaar number.");
+      return;
+    }
+
+    setUploading(true);
+    let uploadedPhotoUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'; // generic elegant profile
+
+    if (form.photoFile) {
+      try {
+        const fileRef = ref(storage, `labours/${Date.now()}_${form.photoFile.name}`);
+        await uploadBytes(fileRef, form.photoFile);
+        uploadedPhotoUrl = await getDownloadURL(fileRef);
+      } catch (err) {
+        console.error("Error uploading labor photo:", err);
+        alert("Photo upload failed, using default placeholder.");
+      }
+    }
+
+    const rateNum = Number(form.salaryRate);
+    const joiningDateVal = form.joiningDate || new Date().toISOString().slice(0, 10);
+
     const labourData = {
       name: form.name,
-      role: form.role,
+      role: form.skillType, // backward compatibility
+      skillType: form.skillType,
       phone: form.phone,
+      aadhaar: form.aadhaar,
+      address: form.address || '',
+      joiningDate: joiningDateVal,
       salaryType: form.salaryType || 'daily',
-      salaryRate: form.salaryRate ? Number(form.salaryRate) : 0,
+      salaryRate: rateNum,
+      photoUrl: uploadedPhotoUrl,
+      dailyWageHistory: [
+        {
+          date: joiningDateVal,
+          rate: rateNum,
+          notes: 'Initial Rate on Joining'
+        }
+      ],
       joinedAt: new Date().toISOString()
     };
-    const docRef = await addDoc(collection(db, 'labours'), labourData);
-    setLabours([...labours, { id: docRef.id, ...labourData }]);
-    setForm({ name: '', role: '', phone: '', salaryType: 'daily', salaryRate: '' });
+
+    try {
+      const docRef = await addDoc(collection(db, 'labours'), labourData);
+      setLabours(prev => [...prev, { id: docRef.id, ...labourData }]);
+      setForm({
+        name: '',
+        skillType: 'Gardener',
+        phone: '',
+        aadhaar: '',
+        address: '',
+        joiningDate: new Date().toISOString().slice(0, 10),
+        salaryType: 'daily',
+        salaryRate: '',
+        photoFile: null,
+        photoPreview: ''
+      });
+      alert("Labour worker registered successfully!");
+    } catch (err) {
+      console.error("Error writing labour worker doc:", err);
+      alert("Could not register worker. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
+  // Update Labourer (Edit worker)
   const updateLabour = async (e) => {
     e.preventDefault();
-    if (!editingLabour || !editingLabour.name) return;
+    if (!editingLabour || !editingLabour.name || !editingLabour.phone || !editingLabour.aadhaar || !editingLabour.salaryRate) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(editingLabour.phone)) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    if (!/^\d{12}$/.test(editingLabour.aadhaar)) {
+      alert("Please enter a valid 12-digit Aadhaar number.");
+      return;
+    }
+
+    setUploading(true);
+    let photoUrl = editingLabour.photoUrl || '';
+
+    if (editingLabour.photoFile) {
+      try {
+        const fileRef = ref(storage, `labours/${Date.now()}_${editingLabour.photoFile.name}`);
+        await uploadBytes(fileRef, editingLabour.photoFile);
+        photoUrl = await getDownloadURL(fileRef);
+      } catch (err) {
+        console.error("Error uploading photo:", err);
+        alert("Photo upload failed, keeping existing photo.");
+      }
+    }
+
+    const currentLabour = labours.find(l => l.id === editingLabour.id);
+    let updatedHistory = editingLabour.dailyWageHistory || currentLabour?.dailyWageHistory || [];
+    
+    const newRate = Number(editingLabour.salaryRate);
+    const oldRate = Number(currentLabour?.salaryRate || 0);
+
+    if (newRate !== oldRate) {
+      updatedHistory = [
+        ...updatedHistory,
+        {
+          date: new Date().toISOString().slice(0, 10),
+          rate: newRate,
+          notes: `Rate updated from ₹${oldRate} to ₹${newRate}`
+        }
+      ];
+    }
+
     try {
       const docRef = doc(db, 'labours', editingLabour.id);
       const updatedData = {
         name: editingLabour.name,
-        role: editingLabour.role,
+        role: editingLabour.skillType, // backward compatibility
+        skillType: editingLabour.skillType,
         phone: editingLabour.phone,
+        aadhaar: editingLabour.aadhaar,
+        address: editingLabour.address || '',
+        joiningDate: editingLabour.joiningDate || currentLabour?.joiningDate || '',
         salaryType: editingLabour.salaryType || 'daily',
-        salaryRate: Number(editingLabour.salaryRate || 0)
+        salaryRate: newRate,
+        photoUrl: photoUrl,
+        dailyWageHistory: updatedHistory
       };
+      
       await setDoc(docRef, updatedData, { merge: true });
-      setLabours(labours.map(l => l.id === editingLabour.id ? { ...l, ...updatedData } : l));
+      setLabours(prev => prev.map(l => l.id === editingLabour.id ? { ...l, ...updatedData } : l));
       setEditingLabour(null);
+      alert("Labourer profile updated successfully!");
     } catch (err) {
-      console.error("Error updating labourer:", err);
+      console.error("Error updating worker doc:", err);
+      alert("Could not update profile.");
+    } finally {
+      setUploading(false);
     }
   };
 
+  const removeLabour = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this labour worker? All history will remain in monthly records but profile is deleted.")) return;
+    try {
+      await deleteDoc(doc(db, 'labours', id));
+      setLabours(prev => prev.filter(l => l.id !== id));
+      alert("Worker profile deleted.");
+    } catch (err) {
+      console.error("Error deleting worker:", err);
+    }
+  };
+
+  // Attendance Toggle Statuses
+  const toggleStatus = async (labourId, day) => {
+    const currentStatus = attendance[labourId]?.[day];
+    let nextStatus;
+    
+    if (!currentStatus) nextStatus = 'Full';
+    else if (currentStatus === 'Full') nextStatus = 'Half';
+    else if (currentStatus === 'Half') nextStatus = 'Absent';
+    else nextStatus = null;
+
+    const newAttendance = { ...attendance };
+    if (!newAttendance[labourId]) newAttendance[labourId] = {};
+    
+    if (nextStatus) {
+      newAttendance[labourId][day] = nextStatus;
+    } else {
+      delete newAttendance[labourId][day];
+    }
+    
+    setAttendance(newAttendance);
+
+    try {
+      const docRef = doc(db, 'attendance', monthKey);
+      await setDoc(docRef, newAttendance, { merge: true });
+    } catch (err) {
+      console.error("Error updating attendance state in database:", err);
+    }
+  };
+
+  // Salary Payments and Advances Record Triggers
   const recordPayment = async (e) => {
     e.preventDefault();
     if (!payingLabourId || !payForm.amount) return;
@@ -122,7 +320,7 @@ export default function LabourRegister() {
       const docRef = doc(db, 'payments', monthKey);
       await setDoc(docRef, newPayments);
     } catch (err) {
-      console.error("Error recording payment:", err);
+      console.error("Error saving payment doc:", err);
     }
   };
 
@@ -138,12 +336,11 @@ export default function LabourRegister() {
     }
     
     setPayments(newPayments);
-    
     try {
       const docRef = doc(db, 'payments', monthKey);
       await setDoc(docRef, newPayments);
     } catch (err) {
-      console.error("Error deleting payment:", err);
+      console.error("Error deleting payment transaction:", err);
     }
   };
 
@@ -175,7 +372,7 @@ export default function LabourRegister() {
       const docRef = doc(db, 'advances', monthKey);
       await setDoc(docRef, newAdvances);
     } catch (err) {
-      console.error("Error recording advance:", err);
+      console.error("Error saving advance doc:", err);
     }
   };
 
@@ -191,49 +388,15 @@ export default function LabourRegister() {
     }
     
     setAdvances(newAdvances);
-    
     try {
       const docRef = doc(db, 'advances', monthKey);
       await setDoc(docRef, newAdvances);
     } catch (err) {
-      console.error("Error deleting advance:", err);
+      console.error("Error deleting advance transaction:", err);
     }
   };
 
-  const removeLabour = async (id) => {
-    if (!window.confirm("Are you sure you want to remove this labourer?")) return;
-    try {
-      await deleteDoc(doc(db, 'labours', id));
-      setLabours(labours.filter(l => l.id !== id));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const toggleStatus = async (labourId, day) => {
-    const currentStatus = attendance[labourId]?.[day];
-    let nextStatus;
-    
-    if (!currentStatus) nextStatus = 'Full';
-    else if (currentStatus === 'Full') nextStatus = 'Half';
-    else if (currentStatus === 'Half') nextStatus = 'Absent';
-    else nextStatus = null;
-
-    const newAttendance = { ...attendance };
-    if (!newAttendance[labourId]) newAttendance[labourId] = {};
-    
-    if (nextStatus) {
-      newAttendance[labourId][day] = nextStatus;
-    } else {
-      delete newAttendance[labourId][day];
-    }
-    
-    setAttendance(newAttendance);
-
-    const docRef = doc(db, 'attendance', monthKey);
-    await setDoc(docRef, newAttendance, { merge: true });
-  };
-
+  // Helper Calculations
   const calculateTotals = (labourId) => {
     const record = attendance[labourId] || {};
     let full = 0, half = 0, absent = 0;
@@ -246,25 +409,391 @@ export default function LabourRegister() {
   };
 
   const getStatusColor = (status) => {
-    if (status === 'Full') return 'bg-green-500 text-white';
-    if (status === 'Half') return 'bg-yellow-400 text-yellow-900';
-    if (status === 'Absent') return 'bg-red-500 text-white';
-    return 'bg-gray-100 hover:bg-gray-200 dark:bg-[#0c2411]';
+    if (status === 'Full') return 'bg-green-500 text-white shadow-sm';
+    if (status === 'Half') return 'bg-amber-400 text-amber-950 shadow-sm font-bold';
+    if (status === 'Absent') return 'bg-red-500 text-white shadow-sm';
+    return 'bg-gray-100 hover:bg-gray-200 dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-300';
   };
 
   const getStatusIcon = (status) => {
     if (status === 'Full') return 'F';
     if (status === 'Half') return 'H';
     if (status === 'Absent') return 'A';
-    return '';
+    return '-';
+  };
+
+  // Search Filter
+  const filteredLabours = labours.filter(l => 
+    l.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (l.skillType || l.role || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (l.phone || '').includes(searchQuery)
+  );
+
+  // Mask Security helpers
+  const toggleAadhaarMask = (id) => {
+    setUnmaskedAadhaarIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleHistoryExpansion = (id) => {
+    setExpandedHistoryIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const getAadhaarDisplay = (id, number) => {
+    if (!number) return 'N/A';
+    if (unmaskedAadhaarIds[id]) {
+      return `${number.slice(0, 4)} ${number.slice(4, 8)} ${number.slice(8, 12)}`;
+    }
+    return `XXXX XXXX ${number.slice(8, 12)}`;
+  };
+
+  // Performance Rating Calculator
+  const getPerformanceRating = (workedDays) => {
+    const pct = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
+    if (pct >= 95) return { label: 'Excellent', style: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800' };
+    if (pct >= 85) return { label: 'Good', style: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 border border-teal-200 dark:border-teal-800' };
+    if (pct >= 70) return { label: 'Average', style: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800' };
+    return { label: 'Needs Improvement', style: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800' };
+  };
+
+  // Trigger browser print function for current report view
+  const printReport = () => {
+    const isDark = document.documentElement.classList.contains('dark');
+    if (isDark) document.documentElement.classList.remove('dark');
+    
+    document.body.classList.add('printing-payroll');
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove('printing-payroll');
+      if (isDark) document.documentElement.classList.add('dark');
+    }, 50);
   };
 
   return (
-    <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-      <div className="attendance-section-wrap">
-        <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <h2 className="text-2xl font-extrabold flex items-center gap-2">
-            <UserPlus /> Labour Register
+    <div className="rounded-[2.5rem] bg-white p-6 shadow-xl border border-leaf-700/5 dark:bg-leaf-950/40">
+      
+      {/* Tab Navigation header */}
+      <div className="no-print mb-8 flex flex-col justify-between gap-5 border-b border-leaf-700/10 pb-5 lg:flex-row lg:items-center">
+        <div>
+          <h2 className="text-3xl font-extrabold flex items-center gap-2 text-leaf-900 dark:text-white">
+            <UserPlus className="text-leaf-600" /> Labour ERP System
+          </h2>
+          <p className="text-sm text-leaf-700/70 dark:text-leaf-300/70 mt-1">
+            Manage worker cards, attendance registers, wage changes, and comprehensive payroll reporting.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <input 
+            type="month" 
+            value={monthKey} 
+            onChange={(e) => {
+              if (e.target.value) setCurrentDate(new Date(e.target.value + '-01T00:00:00'));
+            }} 
+            className="rounded-xl border border-leaf-700/20 bg-cream/40 px-4 py-2 font-bold outline-none dark:bg-leaf-900 dark:border-leaf-800 focus:ring-2 focus:ring-leaf-500" 
+          />
+
+          <div className="flex items-center rounded-xl bg-leaf-50 p-1 dark:bg-leaf-900/80">
+            <button 
+              onClick={() => setActiveTab('directory')}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'directory' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+            >
+              Directory
+            </button>
+            <button 
+              onClick={() => setActiveTab('attendance')}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'attendance' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+            >
+              Attendance Grid
+            </button>
+            <button 
+              onClick={() => setActiveTab('payroll')}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'payroll' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+            >
+              Payroll Ledger
+            </button>
+            <button 
+              onClick={() => setActiveTab('reports')}
+              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-white text-leaf-900 shadow dark:bg-leaf-850 dark:text-white' : 'text-leaf-700/70 hover:text-leaf-900 dark:text-leaf-300'}`}
+            >
+              Reports Center
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Directory Tab View */}
+      {activeTab === 'directory' && (
+        <div className="grid gap-8 lg:grid-cols-3 no-print">
+          
+          {/* Add New Worker Panel */}
+          <div className="glass rounded-[2rem] p-6 border border-leaf-700/10 dark:bg-leaf-900/30">
+            <h3 className="text-xl font-bold flex items-center gap-2 mb-5">
+              <UserPlus className="text-leaf-600" /> Register Worker
+            </h3>
+            
+            <form onSubmit={addLabour} className="space-y-4 text-left">
+              {/* Photo Upload selector */}
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Worker Photo</label>
+                <div className="flex items-center gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full border border-leaf-700/10 bg-leaf-50 dark:bg-leaf-800">
+                    {form.photoPreview ? (
+                      <img src={form.photoPreview} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="grid h-full place-items-center text-xs font-bold text-leaf-500">No Photo</div>
+                    )}
+                  </div>
+                  <label className="cursor-pointer flex items-center gap-2 rounded-xl bg-leaf-100 px-4 py-2 text-xs font-bold text-leaf-800 hover:bg-leaf-200 dark:bg-leaf-800 dark:text-leaf-200 dark:hover:bg-leaf-700 transition">
+                    <Upload size={14} /> Upload File
+                    <input type="file" accept="image/*" onChange={(e) => handlePhotoSelect(e, false)} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Full Name *</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter worker full name" 
+                  value={form.name} 
+                  onChange={e => setForm({ ...form, name: e.target.value })} 
+                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  required 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Skill Type *</label>
+                  <select 
+                    value={form.skillType} 
+                    onChange={e => setForm({ ...form, skillType: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                  >
+                    <option value="Gardener">Gardener</option>
+                    <option value="Landscaper">Landscaper</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Helper">Helper</option>
+                    <option value="Driver">Driver</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Joining Date</label>
+                  <input 
+                    type="date" 
+                    value={form.joiningDate} 
+                    onChange={e => setForm({ ...form, joiningDate: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
+                  <input 
+                    type="text" 
+                    maxLength="10"
+                    placeholder="10-digit number" 
+                    value={form.phone} 
+                    onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. *</label>
+                  <input 
+                    type="text" 
+                    maxLength="12"
+                    placeholder="12-digit number" 
+                    value={form.aadhaar} 
+                    onChange={e => setForm({ ...form, aadhaar: e.target.value.replace(/\D/g, '') })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Salary Type</label>
+                  <select 
+                    value={form.salaryType} 
+                    onChange={e => setForm({ ...form, salaryType: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                  >
+                    <option value="daily">Daily Wage</option>
+                    <option value="monthly">Monthly Salary</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Rate (₹) *</label>
+                  <input 
+                    type="number" 
+                    placeholder="Wage rate" 
+                    value={form.salaryRate} 
+                    onChange={e => setForm({ ...form, salaryRate: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Home Address</label>
+                <textarea 
+                  placeholder="Street details, town/village, pincode" 
+                  value={form.address} 
+                  onChange={e => setForm({ ...form, address: e.target.value })} 
+                  rows="2"
+                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={uploading}
+                className="btn-primary w-full py-3 mt-4 text-xs font-bold uppercase tracking-wider bg-leaf-600 hover:bg-leaf-700 border-none shadow-md"
+              >
+                {uploading ? 'Registering...' : 'Register Worker'}
+              </button>
+            </form>
+          </div>
+
+          {/* Directory Listings */}
+          <div className="lg:col-span-2 space-y-5 text-left">
+            <div className="flex items-center gap-3 bg-cream/20 p-3 rounded-2xl border border-leaf-700/10">
+              <Search className="text-leaf-600" size={18} />
+              <input 
+                type="text" 
+                placeholder="Search workers by name, skill category, or mobile..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent outline-none text-sm text-leaf-900 dark:text-leaf-100"
+              />
+            </div>
+
+            {filteredLabours.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 bg-cream/10 rounded-2xl border border-dashed border-leaf-700/20">
+                No active workers match the criteria.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {filteredLabours.map(labour => (
+                  <div key={labour.id} className="relative glass p-5 rounded-[2rem] border border-leaf-700/10 flex flex-col justify-between hover:shadow-md transition">
+                    <div>
+                      <div className="flex items-start gap-4">
+                        <img 
+                          src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                          alt={labour.name} 
+                          className="h-16 w-16 rounded-full object-cover border-2 border-leaf-500/30"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-extrabold text-lg truncate">{labour.name}</h4>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="inline-flex items-center gap-1 bg-leaf-100 text-leaf-800 px-2.5 py-0.5 rounded-full text-xxs font-extrabold dark:bg-leaf-800 dark:text-leaf-200">
+                              <Award size={10} /> {labour.skillType || labour.role || 'Gardener'}
+                            </span>
+                            <span className="inline-flex items-center bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full text-xxs font-bold dark:bg-leaf-900 dark:text-leaf-300">
+                              ₹{labour.salaryRate}/{labour.salaryType === 'monthly' ? 'm' : 'd'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Detail Fields */}
+                      <div className="mt-4 pt-3 border-t border-leaf-700/5 space-y-2 text-xs">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-leaf-350">
+                          <Phone size={13} className="text-leaf-600 shrink-0" />
+                          <span>{labour.phone || 'No Mobile'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600 dark:text-leaf-350">
+                          <div className="flex items-center gap-2">
+                            <CreditCard size={13} className="text-leaf-600 shrink-0" />
+                            <span>Aadhaar: {getAadhaarDisplay(labour.id, labour.aadhaar)}</span>
+                          </div>
+                          <button 
+                            onClick={() => toggleAadhaarMask(labour.id)}
+                            className="text-xxs font-bold text-leaf-600 hover:underline inline-flex items-center gap-0.5 shrink-0"
+                          >
+                            {unmaskedAadhaarIds[labour.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                            {unmaskedAadhaarIds[labour.id] ? 'Hide' : 'Reveal'}
+                          </button>
+                        </div>
+                        <div className="flex items-start gap-2 text-gray-600 dark:text-leaf-350">
+                          <MapPin size={13} className="text-leaf-600 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2 leading-relaxed">{labour.address || 'Address not listed'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-500 text-xxs">
+                          <Calendar size={11} className="text-leaf-500" />
+                          <span>Joined: {labour.joiningDate ? new Date(labour.joiningDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</span>
+                        </div>
+                      </div>
+
+                      {/* Wage History Toggle */}
+                      <div className="mt-4">
+                        <button
+                          onClick={() => toggleHistoryExpansion(labour.id)}
+                          className="w-full text-left text-xxs font-bold text-leaf-700 hover:text-leaf-900 dark:text-leaf-300 dark:hover:text-white bg-cream/35 dark:bg-leaf-900/40 p-2 rounded-lg flex items-center justify-between"
+                        >
+                          <span>Daily Wage History</span>
+                          <span className="text-xs">{expandedHistoryIds[labour.id] ? '−' : '+'}</span>
+                        </button>
+                        
+                        {expandedHistoryIds[labour.id] && (
+                          <div className="mt-2 p-2 bg-gray-50 dark:bg-leaf-900/60 rounded-lg text-xxs space-y-1 max-h-24 overflow-y-auto border border-leaf-700/5">
+                            {(!labour.dailyWageHistory || labour.dailyWageHistory.length === 0) ? (
+                              <p className="text-gray-400 italic">No wage change log recorded.</p>
+                            ) : (
+                              [...labour.dailyWageHistory].reverse().map((entry, idx) => (
+                                <div key={idx} className="flex justify-between border-b border-gray-150 dark:border-leaf-800 pb-1 last:border-0 last:pb-0">
+                                  <span className="text-gray-500">{entry.date}</span>
+                                  <strong className="text-leaf-900 dark:text-leaf-100">₹{entry.rate}</strong>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions Panel */}
+                    <div className="mt-5 pt-3 border-t border-leaf-700/10 flex justify-end gap-2">
+                      <button 
+                        onClick={() => setEditingLabour(labour)}
+                        className="p-1.5 text-leaf-700 hover:bg-leaf-100 rounded-lg transition dark:hover:bg-leaf-800"
+                        title="Edit Worker Profile"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={() => removeLabour(labour.id)}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition dark:hover:bg-red-950/20"
+                        title="Delete Worker Profile"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attendance Grid Tab View */}
+      {activeTab === 'attendance' && (
+        <div className="attendance-section-wrap text-left">
+          <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center no-print">
+            <div>
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Calendar className="text-leaf-600" /> Attendance Spreadsheet Grid
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Click cells: [F]ull Day → [H]alf Day → [A]bsent → [Clear]. Saves automatically.</p>
+            </div>
+            
             <button 
               type="button" 
               onClick={() => {
@@ -277,117 +806,86 @@ export default function LabourRegister() {
                   if (isDark) document.documentElement.classList.add('dark');
                 }, 50);
               }}
-              className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
+              className="inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-4 py-2 rounded-xl text-xs font-extrabold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >
-              <Printer size={13} /> Print
+              <Printer size={13} /> Print attendance
             </button>
-          </h2>
-        <input 
-          type="month" 
-          value={monthKey} 
-          onChange={(e) => {
-            if(e.target.value) setCurrentDate(new Date(e.target.value + '-01T00:00:00'));
-          }} 
-          className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2" 
-        />
-      </div>
+          </div>
 
-      <form onSubmit={addLabour} className="mb-8 grid gap-4 sm:grid-cols-2 md:grid-cols-6 no-print">
-        <input placeholder="Labour Name" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none" required />
-        <input placeholder="Role (e.g. Gardener)" value={form.role} onChange={e=>setForm({...form, role: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none" />
-        <input placeholder="Phone" value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none" />
-        <select value={form.salaryType} onChange={e=>setForm({...form, salaryType: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none dark:bg-leaf-900">
-          <option value="daily">Daily Wage</option>
-          <option value="monthly">Monthly Salary</option>
-        </select>
-        <input type="number" placeholder="Rate (₹)" value={form.salaryRate} onChange={e=>setForm({...form, salaryRate: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none" required />
-        <button type="submit" className="btn-primary w-full">Add Labourer</button>
-      </form>
+          <div className="print-header hidden mb-6 text-center text-black">
+            <h1 className="text-3xl font-bold uppercase tracking-wider">Kaveri Nursery - Attendance</h1>
+            <p className="text-lg mt-1 font-semibold">Month: {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+          </div>
 
-      <div className="print-header hidden mb-6 text-center text-black">
-        <h1 className="text-3xl font-bold">Kaveri Nursery - Labour Attendance Register</h1>
-        <p className="text-xl mt-2 font-semibold">Month: {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-      </div>
-
-      <div className="overflow-x-auto print-table-wrapper">
-        <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
-          <thead>
-            <tr className="border-b border-leaf-700/20 font-bold uppercase text-soil dark:text-leaf-300">
-              <th className="p-3 min-w-[150px] border border-leaf-700/20">Name</th>
-              {daysArray.map(day => (
-                <th key={day} className="p-3 text-center border border-leaf-700/20 w-8">{day}</th>
-              ))}
-              <th className="p-3 text-center border border-leaf-700/20">F</th>
-              <th className="p-3 text-center border border-leaf-700/20">H</th>
-              <th className="p-3 text-center border border-leaf-700/20">A</th>
-            </tr>
-          </thead>
-          <tbody>
-            {labours.length === 0 ? (
-              <tr><td colSpan={daysInMonth + 4} className="p-4 text-center border border-leaf-700/20">No labours registered.</td></tr>
-            ) : labours.map(labour => {
-              const totals = calculateTotals(labour.id);
-              return (
-                <tr key={labour.id} className="border-b border-leaf-700/10">
-                  <td className="p-3 font-bold border border-leaf-700/20 group">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        {labour.name} <span className="block text-xs font-normal text-gray-500">{labour.role}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={() => setEditingLabour(labour)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-leaf-700 hover:bg-leaf-50 rounded transition-all no-print dark:hover:bg-leaf-800"
-                          title="Edit Labourer"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button 
-                          onClick={() => removeLabour(labour.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded transition-all no-print dark:hover:bg-red-900/20"
-                          title="Remove Labourer"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                  {daysArray.map(day => {
-                    const status = attendance[labour.id]?.[day];
-                    return (
-                      <td key={day} className="border border-leaf-700/20 p-1 text-center">
-                        <button 
-                          onClick={() => toggleStatus(labour.id, day)}
-                          className={`h-7 w-7 rounded font-bold text-xs ${getStatusColor(status)} transition-colors duration-200 no-print-bg`}
-                        >
-                          {getStatusIcon(status)}
-                        </button>
-                      </td>
-                    )
-                  })}
-                  <td className="p-3 text-center border border-leaf-700/20 font-bold text-green-600">{totals.full}</td>
-                  <td className="p-3 text-center border border-leaf-700/20 font-bold text-yellow-600">{totals.half}</td>
-                  <td className="p-3 text-center border border-leaf-700/20 font-bold text-red-600">{totals.absent}</td>
+          <div className="overflow-x-auto border border-leaf-700/10 rounded-2xl print-table-wrapper">
+            <table className="w-full text-left text-xs whitespace-nowrap border-collapse bg-white dark:bg-leaf-950/20">
+              <thead>
+                <tr className="border-b border-leaf-700/20 font-bold uppercase text-soil dark:text-leaf-300 bg-leaf-50/50 dark:bg-leaf-900/40">
+                  <th className="p-3.5 border-r border-leaf-700/10 min-w-[170px] sticky left-0 bg-white dark:bg-leaf-950/90 z-10 shadow-r">Name & Role</th>
+                  {daysArray.map(day => (
+                    <th key={day} className="p-2.5 text-center border-r border-leaf-700/10 w-9">{day}</th>
+                  ))}
+                  <th className="p-3 text-center border-r border-leaf-700/10 text-green-700 w-10">F</th>
+                  <th className="p-3 text-center border-r border-leaf-700/10 text-amber-600 w-10">H</th>
+                  <th className="p-3 text-center border-leaf-700/10 text-red-600 w-10">A</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      
-      <div className="mt-6 flex flex-wrap gap-4 text-sm font-bold no-print justify-center">
-        <span className="flex items-center gap-2"><div className="w-5 h-5 bg-green-500 rounded"></div> Full Day (F)</span>
-        <span className="flex items-center gap-2"><div className="w-5 h-5 bg-yellow-400 rounded"></div> Half Day (H)</span>
-        <span className="flex items-center gap-2"><div className="w-5 h-5 bg-red-500 rounded"></div> Absent (A)</span>
-        <span className="flex items-center gap-2 ml-4 text-gray-500 italic">Click a cell to toggle status</span>
-      </div>
-      </div>
+              </thead>
+              <tbody>
+                {labours.length === 0 ? (
+                  <tr>
+                    <td colSpan={daysInMonth + 4} className="p-6 text-center text-gray-500">No registered workers found to record attendance.</td>
+                  </tr>
+                ) : labours.map(labour => {
+                  const totals = calculateTotals(labour.id);
+                  return (
+                    <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20 transition-all">
+                      <td className="p-3 border-r border-leaf-700/10 font-bold sticky left-0 bg-white dark:bg-leaf-900/90 shadow-r z-10">
+                        {labour.name}
+                        <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
+                      </td>
+                      {daysArray.map(day => {
+                        const status = attendance[labour.id]?.[day];
+                        return (
+                          <td key={day} className="border-r border-leaf-700/10 p-1 text-center">
+                            <button 
+                              onClick={() => toggleStatus(labour.id, day)}
+                              className={`h-7 w-7 rounded font-extrabold text-xxs transition-all flex items-center justify-center mx-auto ${getStatusColor(status)} no-print-bg`}
+                            >
+                              {getStatusIcon(status)}
+                            </button>
+                          </td>
+                        )
+                      })}
+                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-green-600">{totals.full}</td>
+                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-amber-600">{totals.half}</td>
+                      <td className="p-3 text-center font-bold text-red-500">{totals.absent}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* Monthly Payroll & Payments Ledger */}
-      <div className="mt-10 pt-8 border-t border-leaf-700/20 payroll-section-wrap">
-        <div className="mb-6 no-print">
-          <h3 className="text-2xl font-extrabold flex items-center gap-2">
-            <DollarSign /> Monthly Payroll & Payments Ledger
+          <div className="mt-6 flex flex-wrap gap-4 text-xs font-bold no-print justify-center text-leaf-900 dark:text-leaf-200">
+            <span className="flex items-center gap-2"><div className="w-5 h-5 bg-green-500 rounded shadow-sm"></div> Full Day (F)</span>
+            <span className="flex items-center gap-2"><div className="w-5 h-5 bg-amber-400 rounded shadow-sm"></div> Half Day (H)</span>
+            <span className="flex items-center gap-2"><div className="w-5 h-5 bg-red-500 rounded shadow-sm"></div> Absent (A)</span>
+            <span className="flex items-center gap-2 ml-4 text-gray-400 italic">Tip: Click cells in columns to toggle states.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Payroll Ledger Tab View */}
+      {activeTab === 'payroll' && (
+        <div className="payroll-section-wrap text-left">
+          <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center no-print">
+            <div>
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <DollarSign className="text-leaf-600" /> Payroll & Payments Sheet
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Automated payroll, attendance deductions, advances deduction, and payment actions.</p>
+            </div>
+            
             <button 
               type="button" 
               onClick={() => {
@@ -400,404 +898,869 @@ export default function LabourRegister() {
                   if (isDark) document.documentElement.classList.add('dark');
                 }, 50);
               }}
-              className="no-print ml-4 inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-3 py-1 rounded-full text-xs font-semibold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
+              className="inline-flex items-center gap-1.5 bg-leaf-100 hover:bg-leaf-200 text-leaf-900 px-4 py-2 rounded-xl text-xs font-extrabold transition dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-100"
             >
-              <Printer size={13} /> Print
+              <Printer size={13} /> Print Ledger
             </button>
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">Calculated salaries, deductions, and recorded payments for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
-        </div>
+          </div>
 
-        {/* Print-only Header for Ledger */}
-        <div className="print-header hidden mb-6 text-center text-black">
-          <h2 className="text-2xl font-bold">Kaveri Nursery - Monthly Payroll & Payments Ledger</h2>
-          <p className="text-lg mt-1 font-semibold">Month: {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-        </div>
+          <div className="print-header hidden mb-6 text-center text-black">
+            <h1 className="text-3xl font-bold uppercase tracking-wider">Kaveri Nursery - Payroll Ledger</h1>
+            <p className="text-lg mt-1 font-semibold">Month: {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+          </div>
 
-        <div className="overflow-x-auto print-table-wrapper">
-          <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
-            <thead>
-              <tr className="border-b border-leaf-700/20 font-bold uppercase text-soil dark:text-leaf-300">
-                <th className="p-3 border border-leaf-700/20">Name</th>
-                <th className="p-3 border border-leaf-700/20">Salary Config</th>
-                <th className="p-3 border border-leaf-700/20 text-center">Worked Days (F + 0.5*H)</th>
-                <th className="p-3 border border-leaf-700/20 text-right">Gross Salary</th>
-                <th className="p-3 border border-leaf-700/20 text-right text-red-500">Salary Cut</th>
-                <th className="p-3 border border-leaf-700/20 text-right text-green-650 dark:text-green-400">Net Earned</th>
-                <th className="p-3 border border-leaf-700/20 text-right text-amber-600">Advance Taken</th>
-                <th className="p-3 border border-leaf-700/20 text-right text-green-600 dark:text-green-300">Net Payable</th>
-                <th className="p-3 border border-leaf-700/20 text-right">Amount Paid</th>
-                <th className="p-3 border border-leaf-700/20 text-right">Balance Due</th>
-                <th className="p-3 border border-leaf-700/20 text-center no-print">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {labours.length === 0 ? (
-                <tr>
-                  <td colSpan="11" className="p-4 text-center border border-leaf-700/20">No payroll data available.</td>
+          <div className="overflow-x-auto border border-leaf-700/10 rounded-2xl print-table-wrapper">
+            <table className="w-full text-left text-xs whitespace-nowrap border-collapse bg-white dark:bg-leaf-950/20">
+              <thead>
+                <tr className="border-b border-leaf-700/20 font-bold uppercase text-soil dark:text-leaf-300 bg-leaf-50/50 dark:bg-leaf-900/40">
+                  <th className="p-3.5 border-r border-leaf-700/10">Worker Name</th>
+                  <th className="p-3 border-r border-leaf-700/10">Salary Rate</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-center">Worked Days</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right">Gross Salary</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right text-red-500">Absent Cuts</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right text-green-700">Net Earned</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right text-amber-600">Advance Taken</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right text-green-800">Net Payable</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right text-leaf-700">Amount Paid</th>
+                  <th className="p-3 border-r border-leaf-700/10 text-right">Balance Due</th>
+                  <th className="p-3 text-center no-print">ERP Actions</th>
                 </tr>
-              ) : labours.map(labour => {
-                const totals = calculateTotals(labour.id);
-                const workedDays = totals.full + 0.5 * totals.half;
-                
-                const salaryType = labour.salaryType || 'daily';
-                const salaryRate = labour.salaryRate || 0;
-                
-                let grossSalary = 0;
-                let salaryCut = 0;
-                let netSalary = 0;
-                
-                if (salaryType === 'monthly') {
-                  grossSalary = salaryRate;
-                  netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
-                  salaryCut = grossSalary - netSalary;
-                } else {
-                  // Daily
-                  grossSalary = Math.round(salaryRate * daysInMonth);
-                  netSalary = Math.round(salaryRate * workedDays);
-                  salaryCut = grossSalary - netSalary;
-                }
-                
-                const labourAdvances = advances[labour.id] || [];
-                const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
-                const netPayable = netSalary - totalAdvance;
-                
-                const labourPayments = payments[labour.id] || [];
-                const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
-                const balanceDue = netPayable - totalPaid;
-                
-                return (
-                  <tr key={labour.id} className="border-b border-leaf-700/10">
-                    <td className="p-3 font-bold border border-leaf-700/20">
-                      {labour.name}
-                      <span className="block text-xs font-normal text-gray-500">{labour.role || 'No Role'}</span>
-                    </td>
-                    <td className="p-3 border border-leaf-700/20">
-                      {salaryType === 'monthly' ? (
-                        <span>₹{salaryRate.toLocaleString()} <span className="text-xs text-gray-500">/ Month</span></span>
-                      ) : (
-                        <span>₹{salaryRate.toLocaleString()} <span className="text-xs text-gray-500">/ Day</span></span>
-                      )}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-center font-bold">
-                      {workedDays} <span className="text-xs font-normal text-gray-500">/ {daysInMonth} days</span>
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right">
-                      ₹{grossSalary.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right text-red-650 dark:text-red-400 font-semibold">
-                      -₹{salaryCut.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right text-green-600 dark:text-green-300 font-semibold">
-                      ₹{netSalary.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right text-amber-600 dark:text-amber-400 font-semibold">
-                      ₹{totalAdvance.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right text-green-600 dark:text-green-400 font-extrabold">
-                      ₹{netPayable.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right font-semibold text-leaf-800 dark:text-leaf-200">
-                      ₹{totalPaid.toLocaleString()}
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-right font-extrabold">
-                      <span className={balanceDue > 0 ? 'text-amber-600 dark:text-amber-400' : balanceDue < 0 ? 'text-red-500' : 'text-gray-500'}>
-                        ₹{balanceDue.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="p-3 border border-leaf-700/20 text-center no-print">
-                      <div className="flex justify-center gap-1">
-                        <button 
-                          onClick={() => {
-                            setPayingLabourId(labour.id);
-                            setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-                          }}
-                          className="flex items-center gap-0.5 bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded-lg text-xs transition-colors"
-                          title="Pay Salary"
-                        >
-                          <DollarSign size={11} /> Pay
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setRecordingAdvanceLabourId(labour.id);
-                            setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-                          }}
-                          className="flex items-center gap-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-2 rounded-lg text-xs transition-colors"
-                          title="Give Advance"
-                        >
-                          <Coins size={11} /> Advance
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setViewingHistoryLabourId(labour.id);
-                            setHistoryTab('payments');
-                          }}
-                          className="flex items-center gap-0.5 bg-gray-150 hover:bg-gray-250 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 font-bold py-1 px-2 rounded-lg text-xs transition-colors"
-                          title="Payment & Advance History"
-                        >
-                          <History size={11} /> History
-                        </button>
-                        <button 
-                          onClick={() => setViewingSlipLabour(labour)}
-                          className="flex items-center gap-0.5 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg text-xs transition-colors"
-                          title="Print Salary Slip"
-                        >
-                          <FileText size={11} /> Slip
-                        </button>
-                      </div>
-                    </td>
+              </thead>
+              <tbody>
+                {labours.length === 0 ? (
+                  <tr>
+                    <td colSpan="11" className="p-6 text-center text-gray-500">No registered workers found to display payroll.</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ) : labours.map(labour => {
+                  const totals = calculateTotals(labour.id);
+                  const workedDays = totals.full + 0.5 * totals.half;
+                  
+                  const salaryType = labour.salaryType || 'daily';
+                  const salaryRate = labour.salaryRate || 0;
+                  
+                  let grossSalary = 0;
+                  let salaryCut = 0;
+                  let netSalary = 0;
+                  
+                  if (salaryType === 'monthly') {
+                    grossSalary = salaryRate;
+                    netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                    salaryCut = grossSalary - netSalary;
+                  } else {
+                    grossSalary = Math.round(salaryRate * daysInMonth);
+                    netSalary = Math.round(salaryRate * workedDays);
+                    salaryCut = grossSalary - netSalary;
+                  }
+                  
+                  const labourAdvances = advances[labour.id] || [];
+                  const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
+                  const netPayable = netSalary - totalAdvance;
+                  
+                  const labourPayments = payments[labour.id] || [];
+                  const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
+                  const balanceDue = netPayable - totalPaid;
+                  
+                  return (
+                    <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20">
+                      <td className="p-3 border-r border-leaf-700/10 font-bold">
+                        {labour.name}
+                        <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
+                      </td>
+                      <td className="p-3 border-r border-leaf-700/10">
+                        {salaryType === 'monthly' ? `₹${salaryRate.toLocaleString()}/m` : `₹${salaryRate.toLocaleString()}/d`}
+                      </td>
+                      <td className="p-3 border-r border-leaf-700/10 text-center font-bold">
+                        {workedDays} <span className="text-xxs font-normal text-gray-400">/ {daysInMonth}d</span>
+                      </td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right">₹{grossSalary.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-red-500 font-semibold">-₹{salaryCut.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-700 font-semibold">₹{netSalary.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-amber-600 font-semibold">₹{totalAdvance.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-800 font-extrabold">₹{netPayable.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right font-semibold text-leaf-700 dark:text-leaf-300">₹{totalPaid.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right font-extrabold">
+                        <span className={balanceDue > 0 ? 'text-amber-600' : balanceDue < 0 ? 'text-red-500' : 'text-gray-500'}>
+                          ₹{balanceDue.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center no-print">
+                        <div className="flex justify-center gap-1.5">
+                          <button 
+                            onClick={() => {
+                              setPayingLabourId(labour.id);
+                              setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+                            }}
+                            className="inline-flex items-center gap-0.5 bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                          >
+                            <DollarSign size={10} /> Pay
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setRecordingAdvanceLabourId(labour.id);
+                              setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+                            }}
+                            className="inline-flex items-center gap-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                          >
+                            <Coins size={10} /> Advance
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setViewingHistoryLabourId(labour.id);
+                              setHistoryTab('payments');
+                            }}
+                            className="inline-flex items-center gap-0.5 bg-gray-100 hover:bg-gray-250 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 py-1 px-2 rounded-lg text-xxs transition-colors"
+                          >
+                            <History size={10} /> Logs
+                          </button>
+                          <button 
+                            onClick={() => setViewingSlipLabour(labour)}
+                            className="inline-flex items-center gap-0.5 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                          >
+                            <FileText size={10} /> Slip
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Edit Labourer Modal */}
-      {editingLabour && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-xl dark:bg-leaf-900 border border-leaf-700/10 text-left">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-extrabold flex items-center gap-2"><Edit size={20} /> Edit Labourer</h3>
-              <button onClick={() => setEditingLabour(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
+      {/* Reports Center Tab View */}
+      {activeTab === 'reports' && (
+        <div className="reports-section-wrap text-left">
+          
+          {/* Selector controls */}
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center no-print">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-extrabold text-leaf-900 dark:text-white uppercase shrink-0">Select Report:</span>
+              <select 
+                value={reportType}
+                onChange={e => setReportType(e.target.value)}
+                className="rounded-xl border border-leaf-700/20 bg-cream/40 px-4 py-2 text-sm font-bold outline-none dark:bg-leaf-900 dark:border-leaf-800 focus:ring-2 focus:ring-leaf-500"
+              >
+                <option value="attendance">Monthly Attendance Report</option>
+                <option value="salary">Monthly Salary Report</option>
+                <option value="advance">Monthly Advances Report</option>
+                <option value="payments">Monthly Payments History Report</option>
+                <option value="performance">Worker Performance Summary</option>
+              </select>
             </div>
+
+            <button 
+              onClick={printReport}
+              className="inline-flex items-center gap-1.5 bg-leaf-600 hover:bg-leaf-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow"
+            >
+              <Printer size={13} /> Print Report Document
+            </button>
+          </div>
+
+          {/* Printable Report Sheet */}
+          <div className="glass rounded-[2rem] p-6 border border-leaf-700/10 bg-white text-black dark:text-black">
+            
+            {/* Header section */}
+            <div className="text-center border-b pb-5 mb-6">
+              <h2 className="text-3xl font-black uppercase tracking-wider">Kaveri Nursery</h2>
+              <p className="text-xs text-gray-500 uppercase font-bold mt-1">Nursery & Landscaping ERP System · Operations Report</p>
+              <div className="mt-3 text-sm font-extrabold bg-gray-100 py-1.5 px-4 inline-block rounded-xl">
+                {reportType === 'attendance' && 'MONTHLY ATTENDANCE REGISTER'}
+                {reportType === 'salary' && 'MONTHLY SALARY LEDGER REPORT'}
+                {reportType === 'advance' && 'MONTHLY ADVANCES LEDGER REPORT'}
+                {reportType === 'payments' && 'MONTHLY PAYMENTS DISBURSEMENT LOG'}
+                {reportType === 'performance' && 'WORKER PERFORMANCE & ATTENDANCE RATINGS'}
+                {` — ${currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}`}
+              </div>
+            </div>
+
+            {/* Render 1: Monthly Attendance Report */}
+            {reportType === 'attendance' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                      <th className="p-3">Worker Name</th>
+                      <th className="p-3">Skill Category</th>
+                      <th className="p-3 text-center">Full Days (F)</th>
+                      <th className="p-3 text-center">Half Days (H)</th>
+                      <th className="p-3 text-center">Absent Days (A)</th>
+                      <th className="p-3 text-center">Total Worked Days</th>
+                      <th className="p-3 text-right">Attendance %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labours.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="p-4 text-center text-gray-500">No attendance reports available.</td>
+                      </tr>
+                    ) : labours.map(labour => {
+                      const totals = calculateTotals(labour.id);
+                      const workedDays = totals.full + 0.5 * totals.half;
+                      const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
+                      return (
+                        <tr key={labour.id} className="border-b border-gray-200">
+                          <td className="p-3 font-bold">{labour.name}</td>
+                          <td className="p-3">{labour.skillType || labour.role || 'Gardener'}</td>
+                          <td className="p-3 text-center text-green-700 font-semibold">{totals.full}</td>
+                          <td className="p-3 text-center text-amber-600 font-semibold">{totals.half}</td>
+                          <td className="p-3 text-center text-red-600 font-semibold">{totals.absent}</td>
+                          <td className="p-3 text-center font-bold">{workedDays} Days</td>
+                          <td className="p-3 text-right font-extrabold text-gray-800">{attendancePercent}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Render 2: Monthly Salary Report */}
+            {reportType === 'salary' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                      <th className="p-3">Worker Name</th>
+                      <th className="p-3">Rate Config</th>
+                      <th className="p-3 text-center">Worked Days</th>
+                      <th className="p-3 text-right">Gross Salary</th>
+                      <th className="p-3 text-right text-red-600">Absent Cuts</th>
+                      <th className="p-3 text-right text-green-700">Net Earned</th>
+                      <th className="p-3 text-right text-amber-600">Advances</th>
+                      <th className="p-3 text-right font-extrabold">Net Payable</th>
+                      <th className="p-3 text-right text-gray-800">Amount Paid</th>
+                      <th className="p-3 text-right">Balance Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labours.length === 0 ? (
+                      <tr>
+                        <td colSpan="10" className="p-4 text-center text-gray-500">No salary reports available.</td>
+                      </tr>
+                    ) : labours.map(labour => {
+                      const totals = calculateTotals(labour.id);
+                      const workedDays = totals.full + 0.5 * totals.half;
+                      const salaryRate = labour.salaryRate || 0;
+                      const salaryType = labour.salaryType || 'daily';
+                      
+                      let grossSalary = 0;
+                      let salaryCut = 0;
+                      let netSalary = 0;
+                      
+                      if (salaryType === 'monthly') {
+                        grossSalary = salaryRate;
+                        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                        salaryCut = grossSalary - netSalary;
+                      } else {
+                        grossSalary = Math.round(salaryRate * daysInMonth);
+                        netSalary = Math.round(salaryRate * workedDays);
+                        salaryCut = grossSalary - netSalary;
+                      }
+                      
+                      const labourAdvances = advances[labour.id] || [];
+                      const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
+                      const netPayable = netSalary - totalAdvance;
+                      
+                      const labourPayments = payments[labour.id] || [];
+                      const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
+                      const balanceDue = netPayable - totalPaid;
+                      
+                      return (
+                        <tr key={labour.id} className="border-b border-gray-200">
+                          <td className="p-3 font-bold">
+                            {labour.name}
+                            <span className="block text-xxs font-normal text-gray-400">{labour.skillType || labour.role || 'Gardener'}</span>
+                          </td>
+                          <td className="p-3">
+                            ₹{salaryRate}/{salaryType === 'monthly' ? 'm' : 'd'}
+                          </td>
+                          <td className="p-3 text-center font-bold">{workedDays} Days</td>
+                          <td className="p-3 text-right">₹{grossSalary.toLocaleString()}</td>
+                          <td className="p-3 text-right text-red-650 font-semibold">-₹{salaryCut.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-700 font-semibold">₹{netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-right text-amber-600 font-semibold">₹{totalAdvance.toLocaleString()}</td>
+                          <td className="p-3 text-right font-extrabold">₹{netPayable.toLocaleString()}</td>
+                          <td className="p-3 text-right text-gray-700">₹{totalPaid.toLocaleString()}</td>
+                          <td className="p-3 text-right font-extrabold text-blue-700">₹{balanceDue.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Render 3: Advance Report */}
+            {reportType === 'advance' && (
+              <div>
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                      <th className="p-3 w-32">Date Given</th>
+                      <th className="p-3">Worker Name</th>
+                      <th className="p-3">Skill Category</th>
+                      <th className="p-3">Reason / Remarks</th>
+                      <th className="p-3 text-right">Advance Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const allTx = [];
+                      Object.keys(advances).forEach(labId => {
+                        const worker = labours.find(l => l.id === labId);
+                        advances[labId].forEach(tx => {
+                          allTx.push({
+                            ...tx,
+                            workerName: worker?.name || 'Deleted Worker',
+                            workerSkill: worker?.skillType || worker?.role || 'Gardener'
+                          });
+                        });
+                      });
+
+                      if (allTx.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="5" className="p-4 text-center text-gray-500">No salary advances recorded for this month.</td>
+                          </tr>
+                        );
+                      }
+
+                      const sorted = allTx.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      const totalSum = sorted.reduce((sum, entry) => sum + entry.amount, 0);
+
+                      return (
+                        <>
+                          {sorted.map(entry => (
+                            <tr key={entry.id} className="border-b border-gray-200">
+                              <td className="p-3">{entry.date}</td>
+                              <td className="p-3 font-bold">{entry.workerName}</td>
+                              <td className="p-3">{entry.workerSkill}</td>
+                              <td className="p-3 italic text-gray-650">{entry.notes}</td>
+                              <td className="p-3 text-right font-bold text-amber-600">₹{entry.amount.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-150 font-extrabold text-sm border-t-2 border-gray-400">
+                            <td className="p-3 text-right" colSpan="4">GRAND TOTAL ADVANCES:</td>
+                            <td className="p-3 text-right text-amber-700">₹{totalSum.toLocaleString()}</td>
+                          </tr>
+                        </>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Render 4: Payment History Report */}
+            {reportType === 'payments' && (
+              <div>
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                      <th className="p-3 w-32">Disbursement Date</th>
+                      <th className="p-3">Worker Name</th>
+                      <th className="p-3">Skill Category</th>
+                      <th className="p-3">Remarks / Notes</th>
+                      <th className="p-3 text-right">Amount Disbursed (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const allTx = [];
+                      Object.keys(payments).forEach(labId => {
+                        const worker = labours.find(l => l.id === labId);
+                        payments[labId].forEach(tx => {
+                          allTx.push({
+                            ...tx,
+                            workerName: worker?.name || 'Deleted Worker',
+                            workerSkill: worker?.skillType || worker?.role || 'Gardener'
+                          });
+                        });
+                      });
+
+                      if (allTx.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="5" className="p-4 text-center text-gray-500">No salary payment disbursements found for this month.</td>
+                          </tr>
+                        );
+                      }
+
+                      const sorted = allTx.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      const totalSum = sorted.reduce((sum, entry) => sum + entry.amount, 0);
+
+                      return (
+                        <>
+                          {sorted.map(entry => (
+                            <tr key={entry.id} className="border-b border-gray-200">
+                              <td className="p-3">{entry.date}</td>
+                              <td className="p-3 font-bold">{entry.workerName}</td>
+                              <td className="p-3">{entry.workerSkill}</td>
+                              <td className="p-3 italic text-gray-650">{entry.notes}</td>
+                              <td className="p-3 text-right font-bold text-green-700">₹{entry.amount.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-150 font-extrabold text-sm border-t-2 border-gray-400">
+                            <td className="p-3 text-right" colSpan="4">GRAND TOTAL DISBURSED:</td>
+                            <td className="p-3 text-right text-green-800">₹{totalSum.toLocaleString()}</td>
+                          </tr>
+                        </>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Render 5: Worker Performance Summary */}
+            {reportType === 'performance' && (
+              <div>
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300 bg-gray-50 text-gray-700 font-bold uppercase">
+                      <th className="p-3">Worker Photo & Name</th>
+                      <th className="p-3">Skill Category</th>
+                      <th className="p-3 text-center">Days Worked (F + 0.5*H)</th>
+                      <th className="p-3 text-center">Attendance %</th>
+                      <th className="p-3 text-right">Net Earnings (₹)</th>
+                      <th className="p-3 text-center">Attendance Performance Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labours.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-4 text-center text-gray-500">No worker performance records available.</td>
+                      </tr>
+                    ) : labours.map(labour => {
+                      const totals = calculateTotals(labour.id);
+                      const workedDays = totals.full + 0.5 * totals.half;
+                      const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
+                      
+                      const salaryType = labour.salaryType || 'daily';
+                      const salaryRate = labour.salaryRate || 0;
+                      let netSalary = 0;
+                      if (salaryType === 'monthly') {
+                        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                      } else {
+                        netSalary = Math.round(salaryRate * workedDays);
+                      }
+
+                      const rating = getPerformanceRating(workedDays);
+
+                      return (
+                        <tr key={labour.id} className="border-b border-gray-200">
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                                alt={labour.name} 
+                                className="h-10 w-10 rounded-full object-cover border"
+                              />
+                              <div>
+                                <strong className="text-gray-900 block">{labour.name}</strong>
+                                <span className="text-xxs text-gray-500">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 font-semibold">{labour.skillType || labour.role || 'Gardener'}</td>
+                          <td className="p-3 text-center font-bold">{workedDays} / {daysInMonth} Days</td>
+                          <td className="p-3 text-center font-extrabold text-blue-700">{attendancePercent}%</td>
+                          <td className="p-3 text-right font-extrabold text-green-700">₹{netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-center">
+                            <span className={`inline-block px-3 py-1 rounded-full text-xxs font-extrabold uppercase ${rating.style}`}>
+                              {rating.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Signature Blocks */}
+            <div className="mt-16 grid grid-cols-2 gap-12 text-center text-sm border-t border-dashed pt-8">
+              <div>
+                <div className="border-t-2 border-gray-400 w-48 mx-auto pt-2">
+                  <p className="text-gray-600 font-bold text-xs uppercase">Prepared By (Operator)</p>
+                </div>
+              </div>
+              <div>
+                <div className="border-t-2 border-gray-400 w-48 mx-auto pt-2">
+                  <p className="text-gray-600 font-bold text-xs uppercase">Authorized Signature (Owner)</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 text-center text-xxs text-gray-400 font-semibold italic border-t pt-4">
+              Report generated dynamically from Kaveri Nursery ERP Database. Printed on: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Labourer Modal Overlay */}
+      {editingLabour && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-xl font-extrabold flex items-center gap-2 text-leaf-900 dark:text-white">
+                <Edit size={20} className="text-leaf-650" /> Edit Worker Profile
+              </h3>
+              <button 
+                onClick={() => setEditingLabour(null)} 
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
             <form onSubmit={updateLabour} className="space-y-4">
+              {/* Photo Upload selector */}
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Name</label>
-                <input value={editingLabour.name} onChange={e=>setEditingLabour({...editingLabour, name: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" required />
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Worker Photo</label>
+                <div className="flex items-center gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full border border-leaf-700/10 bg-leaf-50 dark:bg-leaf-800">
+                    {editingLabour.photoPreview || editingLabour.photoUrl ? (
+                      <img src={editingLabour.photoPreview || editingLabour.photoUrl} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="grid h-full place-items-center text-xs font-bold text-leaf-500">No Photo</div>
+                    )}
+                  </div>
+                  <label className="cursor-pointer flex items-center gap-2 rounded-xl bg-leaf-100 px-4 py-2 text-xs font-bold text-leaf-800 hover:bg-leaf-200 dark:bg-leaf-800 dark:text-leaf-200 dark:hover:bg-leaf-700 transition">
+                    <Upload size={14} /> Update Photo
+                    <input type="file" accept="image/*" onChange={(e) => handlePhotoSelect(e, true)} className="hidden" />
+                  </label>
+                </div>
               </div>
+
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Role</label>
-                <input value={editingLabour.role || ''} onChange={e=>setEditingLabour({...editingLabour, role: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" />
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Full Name *</label>
+                <input 
+                  type="text" 
+                  value={editingLabour.name} 
+                  onChange={e => setEditingLabour({ ...editingLabour, name: e.target.value })} 
+                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  required 
+                />
               </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Phone</label>
-                <input value={editingLabour.phone || ''} onChange={e=>setEditingLabour({...editingLabour, phone: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" />
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-xs font-bold text-gray-500">Salary Type</label>
-                  <select value={editingLabour.salaryType || 'daily'} onChange={e=>setEditingLabour({...editingLabour, salaryType: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full dark:bg-leaf-900">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Skill Type *</label>
+                  <select 
+                    value={editingLabour.skillType || editingLabour.role || 'Gardener'} 
+                    onChange={e => setEditingLabour({ ...editingLabour, skillType: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                  >
+                    <option value="Gardener">Gardener</option>
+                    <option value="Landscaper">Landscaper</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Helper">Helper</option>
+                    <option value="Driver">Driver</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Joining Date</label>
+                  <input 
+                    type="date" 
+                    value={editingLabour.joiningDate || ''} 
+                    onChange={e => setEditingLabour({ ...editingLabour, joiningDate: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
+                  <input 
+                    type="text" 
+                    maxLength="10"
+                    value={editingLabour.phone || ''} 
+                    onChange={e => setEditingLabour({ ...editingLabour, phone: e.target.value.replace(/\D/g, '') })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. *</label>
+                  <input 
+                    type="text" 
+                    maxLength="12"
+                    value={editingLabour.aadhaar || ''} 
+                    onChange={e => setEditingLabour({ ...editingLabour, aadhaar: e.target.value.replace(/\D/g, '') })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Salary Type</label>
+                  <select 
+                    value={editingLabour.salaryType || 'daily'} 
+                    onChange={e => setEditingLabour({ ...editingLabour, salaryType: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2.5 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm"
+                  >
                     <option value="daily">Daily Wage</option>
                     <option value="monthly">Monthly Salary</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-xs font-bold text-gray-500">Rate (₹)</label>
-                  <input type="number" value={editingLabour.salaryRate || ''} onChange={e=>setEditingLabour({...editingLabour, salaryRate: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" required />
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Rate (₹) *</label>
+                  <input 
+                    type="number" 
+                    value={editingLabour.salaryRate || ''} 
+                    onChange={e => setEditingLabour({ ...editingLabour, salaryRate: e.target.value })} 
+                    className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                    required 
+                  />
                 </div>
               </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setEditingLabour(null)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save Changes</button>
+
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Home Address</label>
+                <textarea 
+                  value={editingLabour.address || ''} 
+                  onChange={e => setEditingLabour({ ...editingLabour, address: e.target.value })} 
+                  rows="2"
+                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm resize-none" 
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 border-t pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingLabour(null)} 
+                  className="btn-secondary px-5 py-2 text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={uploading}
+                  className="btn-primary px-5 py-2 text-xs font-bold bg-leaf-650 hover:bg-leaf-750 text-white border-none"
+                >
+                  {uploading ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Record Payment Modal */}
+      {/* Record Salary Payment Modal Overlay */}
       {payingLabourId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 no-print">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-xl dark:bg-leaf-900 border border-leaf-700/10 text-left">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left text-leaf-900 dark:text-leaf-100">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-extrabold flex items-center gap-2"><DollarSign size={20} /> Record Payment</h3>
+              <h3 className="text-xl font-extrabold flex items-center gap-2"><DollarSign size={20} className="text-green-600" /> Record Wage Payment</h3>
               <button onClick={() => setPayingLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">Record a payment for <strong>{labours.find(l => l.id === payingLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 mb-4">Record a salary payment for <strong>{labours.find(l => l.id === payingLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            
             <form onSubmit={recordPayment} className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Date</label>
-                <input type="date" value={payForm.date} onChange={e=>setPayForm({...payForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" required />
+                <label className="text-xs font-bold text-gray-500 uppercase">Payment Date</label>
+                <input type="date" value={payForm.date} onChange={e=>setPayForm({...payForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Amount (₹)</label>
-                <input type="number" value={payForm.amount} onChange={e=>setPayForm({...payForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" placeholder="Enter amount paid" required />
+                <label className="text-xs font-bold text-gray-500 uppercase">Disbursed Amount (₹)</label>
+                <input type="number" value={payForm.amount} onChange={e=>setPayForm({...payForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="Enter amount paid" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Notes / Remarks</label>
-                <input value={payForm.notes} onChange={e=>setPayForm({...payForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" placeholder="e.g. Salary Part Payment, Final Settlement" />
+                <label className="text-xs font-bold text-gray-500 uppercase">Remarks / Notes</label>
+                <input value={payForm.notes} onChange={e=>setPayForm({...payForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="e.g. UPI, Cash, Final Settlement" />
               </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setPayingLabourId(null)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Record Payment</button>
+              <div className="mt-6 flex justify-end gap-3 border-t pt-4">
+                <button type="button" onClick={() => setPayingLabourId(null)} className="btn-secondary text-xs font-bold px-4 py-2">Cancel</button>
+                <button type="submit" className="btn-primary bg-green-600 hover:bg-green-700 border-none text-xs font-bold px-4 py-2 text-white">Record Disbursal</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Record Advance Modal */}
+      {/* Record Salary Advance Modal Overlay */}
       {recordingAdvanceLabourId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 no-print">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-xl dark:bg-leaf-900 border border-leaf-700/10 text-left">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left text-leaf-900 dark:text-leaf-100">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-extrabold flex items-center gap-2 text-amber-600"><Coins size={20} /> Record Advance</h3>
+              <h3 className="text-xl font-extrabold flex items-center gap-2 text-amber-600"><Coins size={20} /> Record Salary Advance</h3>
               <button onClick={() => setRecordingAdvanceLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">Record an advance given to <strong>{labours.find(l => l.id === recordingAdvanceLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 mb-4">Record a wage advance given to <strong>{labours.find(l => l.id === recordingAdvanceLabourId)?.name}</strong> for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            
             <form onSubmit={recordAdvance} className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Date</label>
-                <input type="date" value={advanceForm.date} onChange={e=>setAdvanceForm({...advanceForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" required />
+                <label className="text-xs font-bold text-gray-500 uppercase">Advance Date</label>
+                <input type="date" value={advanceForm.date} onChange={e=>setAdvanceForm({...advanceForm, date: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Advance Amount (₹)</label>
-                <input type="number" value={advanceForm.amount} onChange={e=>setAdvanceForm({...advanceForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" placeholder="Enter advance amount given" required />
+                <label className="text-xs font-bold text-gray-500 uppercase">Advance Amount (₹)</label>
+                <input type="number" value={advanceForm.amount} onChange={e=>setAdvanceForm({...advanceForm, amount: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="Enter advance amount" required />
               </div>
               <div className="grid gap-2">
-                <label className="text-xs font-bold text-gray-500">Notes / Remarks (Required)</label>
-                <input value={advanceForm.notes} onChange={e=>setAdvanceForm({...advanceForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2 outline-none w-full" placeholder="e.g. Festival advance, Medical advance" required />
+                <label className="text-xs font-bold text-gray-500 uppercase">Notes / Purpose *</label>
+                <input value={advanceForm.notes} onChange={e=>setAdvanceForm({...advanceForm, notes: e.target.value})} className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" placeholder="e.g. Festival advance, Medical needs" required />
               </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setRecordingAdvanceLabourId(null)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary bg-amber-600 hover:bg-amber-700 text-white border-none">Record Advance</button>
+              <div className="mt-6 flex justify-end gap-3 border-t pt-4">
+                <button type="button" onClick={() => setRecordingAdvanceLabourId(null)} className="btn-secondary text-xs font-bold px-4 py-2">Cancel</button>
+                <button type="submit" className="btn-primary bg-amber-600 hover:bg-amber-700 border-none text-xs font-bold px-4 py-2 text-white">Record Advance</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* History Modal (Tabbed) */}
+      {/* Transaction Logs Modal Overlay */}
       {viewingHistoryLabourId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 no-print">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-xl dark:bg-leaf-900 border border-leaf-700/10 text-left">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left text-leaf-900 dark:text-leaf-100">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-extrabold flex items-center gap-2"><History size={20} /> Transaction History</h3>
+              <h3 className="text-xl font-extrabold flex items-center gap-2"><History size={20} className="text-leaf-600" /> Transaction Ledger Logs</h3>
               <button onClick={() => setViewingHistoryLabourId(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">Transactions for <strong>{labours.find(l => l.id === viewingHistoryLabourId)?.name}</strong> in {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+            <p className="text-xs text-gray-500 mb-4">Transactions for <strong>{labours.find(l => l.id === viewingHistoryLabourId)?.name}</strong> in {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
             
             {/* Tabs Header */}
             <div className="flex border-b border-leaf-700/10 mb-4">
               <button 
                 type="button" 
                 onClick={() => setHistoryTab('payments')}
-                className={`flex-1 py-2 font-bold text-sm text-center border-b-2 transition-all ${historyTab === 'payments' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 py-2 font-bold text-xs text-center border-b-2 transition-all ${historyTab === 'payments' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-400 hover:text-gray-650'}`}
               >
-                Payments
+                Payments Disbursed
               </button>
               <button 
                 type="button" 
                 onClick={() => setHistoryTab('advances')}
-                className={`flex-1 py-2 font-bold text-sm text-center border-b-2 transition-all ${historyTab === 'advances' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 py-2 font-bold text-xs text-center border-b-2 transition-all ${historyTab === 'advances' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-gray-650'}`}
               >
-                Advances Taken
+                Advances Given
               </button>
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+            <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
               {historyTab === 'payments' ? (
                 !payments[viewingHistoryLabourId] || payments[viewingHistoryLabourId].length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">No payments recorded for this month.</p>
+                  <p className="text-xs text-gray-400 text-center py-6 italic">No payment logs found for this month.</p>
                 ) : (
                   payments[viewingHistoryLabourId].map((tx) => (
-                    <div key={tx.id} className="flex justify-between items-center bg-green-50/50 dark:bg-green-950/10 p-3 rounded-xl border border-green-700/5">
+                    <div key={tx.id} className="flex justify-between items-center bg-green-50/40 p-3 rounded-xl border border-green-700/5 dark:bg-green-950/10">
                       <div>
-                        <p className="font-extrabold text-green-700 dark:text-green-400">₹{tx.amount}</p>
-                        <p className="text-xs text-gray-500">{tx.date} · {tx.notes}</p>
+                        <p className="font-extrabold text-sm text-green-700 dark:text-green-400">₹{tx.amount}</p>
+                        <p className="text-xxs text-gray-500 mt-0.5">{tx.date} · {tx.notes}</p>
                       </div>
                       <button 
                         onClick={() => deletePayment(viewingHistoryLabourId, tx.id)}
-                        className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                        title="Delete Payment Record"
+                        className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   ))
                 )
               ) : (
                 !advances[viewingHistoryLabourId] || advances[viewingHistoryLabourId].length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">No advances recorded for this month.</p>
+                  <p className="text-xs text-gray-400 text-center py-6 italic">No advance logs found for this month.</p>
                 ) : (
                   advances[viewingHistoryLabourId].map((tx) => (
-                    <div key={tx.id} className="flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/10 p-3 rounded-xl border border-amber-700/5">
+                    <div key={tx.id} className="flex justify-between items-center bg-amber-50/40 p-3 rounded-xl border border-amber-700/5 dark:bg-amber-950/10">
                       <div>
-                        <p className="font-extrabold text-amber-700 dark:text-amber-400">₹{tx.amount}</p>
-                        <p className="text-xs text-gray-500">{tx.date} · {tx.notes}</p>
+                        <p className="font-extrabold text-sm text-amber-700 dark:text-amber-400">₹{tx.amount}</p>
+                        <p className="text-xxs text-gray-500 mt-0.5">{tx.date} · {tx.notes}</p>
                       </div>
                       <button 
                         onClick={() => deleteAdvance(viewingHistoryLabourId, tx.id)}
-                        className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                        title="Delete Advance Record"
+                        className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   ))
                 )
               )}
             </div>
-            <div className="mt-6 flex justify-end">
-              <button onClick={() => setViewingHistoryLabourId(null)} className="btn-secondary">Close</button>
+            
+            <div className="mt-6 flex justify-end border-t pt-4">
+              <button onClick={() => setViewingHistoryLabourId(null)} className="btn-secondary text-xs font-bold px-4 py-2">Close</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Salary Slip Modal (using portal for absolute print isolation) */}
+      {/* Salary Slip Modal Portal (Isolates print overlay cleanly) */}
       {viewingSlipLabour && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 print-slip-overlay no-print">
-          <div className="relative w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-xl rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left text-leaf-900 dark:text-leaf-100">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-extrabold flex items-center gap-2 text-leaf-800 dark:text-leaf-100"><FileText size={20} /> Salary Slip Preview</h3>
+              <h3 className="text-xl font-extrabold flex items-center gap-2"><FileText size={20} className="text-leaf-600" /> Salary Slip Preview</h3>
               <button onClick={() => setViewingSlipLabour(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
 
-            {/* Scrollable View Content */}
             <div className="max-h-[70vh] overflow-y-auto pr-2 mb-6">
-              {/* Slip Card (exactly what will print) */}
               <div className="print-slip-paper p-6 border border-gray-200 dark:border-leaf-800 bg-white rounded-2xl text-black">
                 <div className="text-center border-b pb-4 mb-4">
-                  <h2 className="text-2xl font-extrabold tracking-wide uppercase">Kaveri Nursery</h2>
+                  <h2 className="text-2xl font-black uppercase tracking-wider">Kaveri Nursery</h2>
                   <p className="text-xs text-gray-500">Mhasrul, Nashik - 422004</p>
-                  <p className="text-xs text-gray-500">Phone: +91 9876543210</p>
-                  <div className="mt-2 text-sm font-bold bg-gray-100 py-1 px-3 inline-block rounded">
+                  <p className="text-xs text-gray-500">Operations Support: +91 9876543210</p>
+                  <div className="mt-3 text-xs font-extrabold bg-gray-150 py-1.5 px-4 inline-block rounded">
                     SALARY SLIP - {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-xs mb-4">
-                  <div>
-                    <span className="text-gray-500 block">Labour Name</span>
-                    <strong className="text-sm text-gray-800">{viewingSlipLabour.name}</strong>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Designation / Role</span>
-                    <strong className="text-sm text-gray-800">{viewingSlipLabour.role || 'General Labour'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Phone</span>
-                    <strong className="text-sm text-gray-800">{viewingSlipLabour.phone || 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Salary Configuration</span>
-                    <strong className="text-sm text-gray-800">
-                      ₹{Number(viewingSlipLabour.salaryRate || 0).toLocaleString()} / {viewingSlipLabour.salaryType === 'monthly' ? 'Month' : 'Day'}
-                    </strong>
+                <div className="flex items-start gap-4 mb-5 pb-4 border-b">
+                  <img 
+                    src={viewingSlipLabour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+                    alt={viewingSlipLabour.name} 
+                    className="h-16 w-16 rounded-full object-cover border"
+                  />
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xxs flex-1">
+                    <div>
+                      <span className="text-gray-400 block font-bold">Worker Name</span>
+                      <strong className="text-xs text-gray-800">{viewingSlipLabour.name}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block font-bold">Skill / Role</span>
+                      <strong className="text-xs text-gray-800">{viewingSlipLabour.skillType || viewingSlipLabour.role || 'Gardener'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block font-bold">Mobile</span>
+                      <strong className="text-xs text-gray-800">{viewingSlipLabour.phone || 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block font-bold">Salary Config</span>
+                      <strong className="text-xs text-gray-800">
+                        ₹{Number(viewingSlipLabour.salaryRate || 0).toLocaleString()} / {viewingSlipLabour.salaryType === 'monthly' ? 'Month' : 'Day'}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
                 {/* Attendance Summary */}
-                <div className="bg-gray-50 p-3 rounded-lg mb-4 text-xs">
-                  <h4 className="font-bold mb-1 text-gray-600">ATTENDANCE SUMMARY</h4>
+                <div className="bg-gray-50 p-3 rounded-lg mb-4 text-xxs border">
+                  <h4 className="font-black mb-1.5 text-gray-500 uppercase tracking-wider">Attendance Breakdown</h4>
                   <div className="grid grid-cols-4 gap-2 text-center">
                     <div>
-                      <span className="block text-gray-500">Full Days</span>
+                      <span className="block text-gray-400">Full Days</span>
                       <strong className="text-sm text-green-700">{calculateTotals(viewingSlipLabour.id).full}</strong>
                     </div>
                     <div>
-                      <span className="block text-gray-500">Half Days</span>
-                      <strong className="text-sm text-yellow-600">{calculateTotals(viewingSlipLabour.id).half}</strong>
+                      <span className="block text-gray-400">Half Days</span>
+                      <strong className="text-sm text-amber-600">{calculateTotals(viewingSlipLabour.id).half}</strong>
                     </div>
                     <div>
-                      <span className="block text-gray-500">Absent Days</span>
+                      <span className="block text-gray-400">Absent Days</span>
                       <strong className="text-sm text-red-600">{calculateTotals(viewingSlipLabour.id).absent}</strong>
                     </div>
                     <div>
-                      <span className="block text-gray-500">Worked Days</span>
+                      <span className="block text-gray-400">Worked Days</span>
                       <strong className="text-sm text-blue-700">
                         {calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half} / {daysInMonth}
                       </strong>
@@ -805,18 +1768,18 @@ export default function LabourRegister() {
                   </div>
                 </div>
 
-                {/* Earnings & Deductions Breakdown */}
-                <table className="w-full text-xs text-left border-collapse mb-4">
+                {/* Payroll Details */}
+                <table className="w-full text-xxs text-left border-collapse mb-4">
                   <thead>
-                    <tr className="border-b bg-gray-100 text-gray-600 font-bold">
-                      <th className="p-2">Description</th>
-                      <th className="p-2 text-right">Earnings (₹)</th>
-                      <th className="p-2 text-right">Deductions (₹)</th>
+                    <tr className="border-b bg-gray-100 text-gray-600 font-bold uppercase">
+                      <th className="p-2">Transaction Description</th>
+                      <th className="p-2 text-right">Credit Earnings (₹)</th>
+                      <th className="p-2 text-right">Debit Deductions (₹)</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b">
-                      <td className="p-2 font-semibold">Gross Salary (Based on month duration)</td>
+                      <td className="p-2 font-semibold">Gross Salary Rate</td>
                       <td className="p-2 text-right">
                         {viewingSlipLabour.salaryType === 'monthly'
                           ? Number(viewingSlipLabour.salaryRate || 0).toLocaleString()
@@ -825,7 +1788,7 @@ export default function LabourRegister() {
                       <td className="p-2 text-right">-</td>
                     </tr>
                     <tr className="border-b">
-                      <td className="p-2">Attendance Cut (Absent/Half Days)</td>
+                      <td className="p-2">Absent Day Cuts</td>
                       <td className="p-2 text-right">-</td>
                       <td className="p-2 text-right text-red-600">
                         {(() => {
@@ -862,22 +1825,22 @@ export default function LabourRegister() {
                       <td className="p-2 text-right">-</td>
                     </tr>
                     <tr className="border-b">
-                      <td className="p-2 text-amber-700 font-semibold">Salary Advances Taken (Monthly)</td>
+                      <td className="p-2 text-amber-700 font-semibold">Total Advances Deducted</td>
                       <td className="p-2 text-right">-</td>
                       <td className="p-2 text-right font-bold text-amber-700">
                         {Number((advances[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0)).toLocaleString()}
                       </td>
                     </tr>
                     <tr className="border-b">
-                      <td className="p-2">Salary Payments Received (Monthly)</td>
+                      <td className="p-2 font-semibold text-green-700">Salary Disbursed (Paid)</td>
                       <td className="p-2 text-right">-</td>
-                      <td className="p-2 text-right font-bold text-green-700">
+                      <td className="p-2 text-right font-bold text-green-750">
                         {Number((payments[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0)).toLocaleString()}
                       </td>
                     </tr>
-                    <tr className="border-t-2 font-extrabold bg-gray-100">
+                    <tr className="border-t-2 font-extrabold bg-gray-100 text-xs">
                       <td className="p-2">Balance Salary Due</td>
-                      <td className="p-2 text-right text-blue-700 text-sm" colSpan="2">
+                      <td className="p-2 text-right text-blue-700" colSpan="2">
                         {(() => {
                           const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
                           const rate = Number(viewingSlipLabour.salaryRate || 0);
@@ -896,41 +1859,20 @@ export default function LabourRegister() {
                   </tbody>
                 </table>
 
-                {/* Advance Details */}
-                {(advances[viewingSlipLabour.id] || []).length > 0 && (
-                  <div className="mb-4 text-xxs">
-                    <h4 className="font-bold text-amber-800 border-b pb-1 mb-1">ADVANCE NOTES & DETAILS</h4>
-                    <div className="space-y-1">
-                      {(advances[viewingSlipLabour.id] || []).map(tx => (
-                        <div key={tx.id} className="flex justify-between text-gray-700">
-                          <span>{tx.date} · {tx.notes}</span>
-                          <strong>₹{tx.amount}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Signature Blocks */}
-                <div className="mt-8 pt-8 grid grid-cols-2 gap-8 text-center text-xs">
-                  <div className="border-t border-dashed pt-2">
-                    <p className="text-gray-500">Employee Signature</p>
+                <div className="mt-8 pt-6 grid grid-cols-2 gap-8 text-center text-xxs">
+                  <div className="border-t border-dashed pt-1.5">
+                    <p className="text-gray-500 uppercase font-bold">Worker Signature</p>
                   </div>
-                  <div className="border-t border-dashed pt-2">
-                    <p className="text-gray-500">Authorized Signature</p>
+                  <div className="border-t border-dashed pt-1.5">
+                    <p className="text-gray-500 uppercase font-bold">Authorized signature</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 no-print">
-              <button 
-                type="button" 
-                onClick={() => setViewingSlipLabour(null)} 
-                className="btn-secondary"
-              >
-                Close
-              </button>
+              <button type="button" onClick={() => setViewingSlipLabour(null)} className="btn-secondary px-4 py-2 text-xs font-bold">Close</button>
               <button 
                 type="button" 
                 onClick={() => {
@@ -943,9 +1885,9 @@ export default function LabourRegister() {
                     if (isDark) document.documentElement.classList.add('dark');
                   }, 50);
                 }} 
-                className="btn-primary inline-flex items-center gap-1"
+                className="btn-primary flex items-center gap-1 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 border-none text-white shadow-sm"
               >
-                <Printer size={15} /> Print Slip
+                <Printer size={13} /> Print Salary Slip
               </button>
             </div>
           </div>
@@ -965,24 +1907,31 @@ export default function LabourRegister() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6 text-sm mb-6 border-b pb-4">
-            <div>
-              <span className="text-gray-500 block">Labour Name:</span>
-              <strong className="text-lg text-gray-900">{viewingSlipLabour.name}</strong>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Designation / Role:</span>
-              <strong className="text-lg text-gray-900">{viewingSlipLabour.role || 'General Labour'}</strong>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Phone:</span>
-              <strong className="text-lg text-gray-900">{viewingSlipLabour.phone || 'N/A'}</strong>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Salary Configuration:</span>
-              <strong className="text-lg text-gray-900">
-                ₹{Number(viewingSlipLabour.salaryRate || 0).toLocaleString()} / {viewingSlipLabour.salaryType === 'monthly' ? 'Month' : 'Day'}
-              </strong>
+          <div className="flex items-start gap-6 mb-6 border-b pb-4">
+            <img 
+              src={viewingSlipLabour.photoUrl} 
+              alt={viewingSlipLabour.name} 
+              className="h-20 w-20 rounded-full object-cover border-2"
+            />
+            <div className="grid grid-cols-2 gap-6 text-sm flex-1">
+              <div>
+                <span className="text-gray-500 block">Labour Name:</span>
+                <strong className="text-lg text-gray-900">{viewingSlipLabour.name}</strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Designation / Skill Category:</span>
+                <strong className="text-lg text-gray-900">{viewingSlipLabour.skillType || viewingSlipLabour.role || 'Gardener'}</strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Phone:</span>
+                <strong className="text-lg text-gray-900">{viewingSlipLabour.phone || 'N/A'}</strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Salary Configuration:</span>
+                <strong className="text-lg text-gray-900">
+                  ₹{Number(viewingSlipLabour.salaryRate || 0).toLocaleString()} / {viewingSlipLabour.salaryType === 'monthly' ? 'Month' : 'Day'}
+                </strong>
+              </div>
             </div>
           </div>
 
@@ -1033,7 +1982,7 @@ export default function LabourRegister() {
               <tr className="border-b border-gray-200">
                 <td className="p-3">Attendance Cut (Absent/Half Days)</td>
                 <td className="p-3 text-right">-</td>
-                <td className="p-3 text-right text-red-600 font-semibold">
+                <td className="p-3 text-right text-red-650 font-semibold">
                   {(() => {
                     const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
                     const rate = Number(viewingSlipLabour.salaryRate || 0);
@@ -1077,7 +2026,7 @@ export default function LabourRegister() {
               <tr className="border-b border-gray-200">
                 <td className="p-3 font-semibold">Salary Payments Received</td>
                 <td className="p-3 text-right">-</td>
-                <td className="p-3 text-right font-bold text-green-700">
+                <td className="p-3 text-right font-bold text-green-750">
                   {Number((payments[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0)).toLocaleString()}
                 </td>
               </tr>
@@ -1153,6 +2102,7 @@ export default function LabourRegister() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
