@@ -5,6 +5,7 @@ import { blogs, businessInfo, faqs, heroImage, owner } from '../data/sampleData.
 import PlantCard from '../components/PlantCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatCard from '../components/StatCard.jsx';
+import BeforeAfterSlider from '../components/BeforeAfterSlider.jsx';
 
 import { collection, getDocs, addDoc, doc, updateDoc, increment, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -216,7 +217,7 @@ export default function Home() {
           <div className="masonry">
             {filteredProjects.map((project) => (
               <article key={project.id} className="overflow-hidden rounded-2xl bg-white shadow-lg dark:bg-leaf-900/60">
-                <img src={project.after} alt={project.title} className="h-auto w-full object-cover" />
+                <BeforeAfterSlider before={project.before} after={project.after} title={project.title} />
                 <div className="p-5">
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{project.category}</p>
                   <h3 className="mt-2 text-xl font-extrabold">{project.title}</h3>
@@ -393,9 +394,11 @@ export default function Home() {
         <div className="fixed inset-0 z-[70] grid place-items-center bg-leaf-900/70 px-4 py-8 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-[2rem] bg-cream shadow-glow dark:bg-[#0c2411]">
             <div className="grid lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="relative min-h-[320px]">
-                <img src={selectedProject.after} alt={selectedProject.title} className="absolute inset-0 h-full w-full object-cover" />
-                <span className="absolute left-5 top-5 rounded-full bg-white/90 px-4 py-2 text-sm font-extrabold text-leaf-900">{selectedProject.category}</span>
+              <div className="relative min-h-[320px] lg:min-h-full flex flex-col justify-between">
+                <div className="flex-1 w-full relative">
+                  <BeforeAfterSlider before={selectedProject.before} after={selectedProject.after} title={selectedProject.title} />
+                </div>
+                <span className="absolute left-5 top-5 rounded-full bg-white/90 px-4 py-2 text-sm font-extrabold text-leaf-900 z-10">{selectedProject.category}</span>
               </div>
               <div className="p-6 md:p-8">
                 <div className="mb-5 flex items-start justify-between gap-4">
