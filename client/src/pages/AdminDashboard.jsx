@@ -50,6 +50,7 @@ export default function AdminDashboard() {
   const [bills, setBills] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [editingProjectId, setEditingProjectId] = useState(null);
+  const [isSavingProject, setIsSavingProject] = useState(false);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [laboursCount, setLaboursCount] = useState(0);
 
@@ -162,10 +163,20 @@ export default function AdminDashboard() {
 
   const addOrUpdateProject = async (event) => {
     event.preventDefault();
-    if (!projectForm.title || !projectForm.after || !projectForm.scope) return;
+    
+    if (!projectForm.title.trim()) {
+      alert("Please enter a project title.");
+      return;
+    }
+    if (!projectForm.scope.trim()) {
+      alert("Please enter work details / scope.");
+      return;
+    }
 
-    let beforeUrl = projectForm.before;
-    let afterUrl = projectForm.after;
+    setIsSavingProject(true);
+
+    let beforeUrl = projectForm.before || 'https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=900&q=80';
+    let afterUrl = projectForm.after || 'https://images.unsplash.com/photo-1558904541-efa8c3a30fc9?auto=format&fit=crop&w=900&q=80';
 
     try {
       if (projectForm.beforeFile) {
@@ -186,11 +197,11 @@ export default function AdminDashboard() {
         duration: projectForm.duration,
         budget: projectForm.budget,
         scope: projectForm.scope,
-        plantsUsed: projectForm.plantsUsed.split(',').map((item) => item.trim()).filter(Boolean),
-        result: projectForm.result,
+        plantsUsed: (projectForm.plantsUsed || '').split(',').map((item) => item.trim()).filter(Boolean),
+        result: projectForm.result || 'Successfully completed landscaping project.',
         beforeImage: beforeUrl,
         afterImage: afterUrl,
-        description: projectForm.result
+        description: projectForm.result || 'Successfully completed landscaping project.'
       };
 
       let savedId = editingProjectId;
@@ -208,10 +219,16 @@ export default function AdminDashboard() {
         }
         return [savedProject, ...current];
       });
+
+      alert(editingProjectId ? "Project updated successfully!" : "Project added successfully!");
+
       setEditingProjectId(null);
       setProjectForm(emptyProjectForm);
     } catch (error) {
       console.error("Error saving project", error);
+      alert("Error saving project: " + error.message);
+    } finally {
+      setIsSavingProject(false);
     }
   };
 
@@ -609,7 +626,18 @@ export default function AdminDashboard() {
                   <UploadBox label="After / main image" preview={projectForm.after} onChange={(file) => handleProjectImage('after', file)} />
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <button className="btn-primary"><Plus size={18} /> {editingProjectId ? 'Update Work' : 'Save Work'}</button>
+                  <button disabled={isSavingProject} className="btn-primary">
+                    {isSavingProject ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                        {editingProjectId ? 'Updating...' : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={18} /> {editingProjectId ? 'Update Work' : 'Save Work'}
+                      </>
+                    )}
+                  </button>
                   {editingProjectId && (
                     <button type="button" onClick={() => { setEditingProjectId(null); setProjectForm(emptyProjectForm); }} className="btn-secondary">
                       Cancel
