@@ -20,6 +20,7 @@ export default function Home() {
   const [plantCategory, setPlantCategory] = useState('All');
   const [projectCategory, setProjectCategory] = useState('All');
   const [selectedProject, setSelectedProject] = useState(null);
+  const [activeLightboxImage, setActiveLightboxImage] = useState(null);
   
   const [livePlants, setLivePlants] = useState([]);
   const [liveProjects, setLiveProjects] = useState([]);
@@ -39,7 +40,8 @@ export default function Home() {
             id: d.id, 
             ...d.data(), 
             before: d.data().beforeImage || '', 
-            after: d.data().afterImage || d.data().image || '' 
+            after: d.data().afterImage || d.data().image || '',
+            additionalImages: d.data().additionalImages || []
           })));
         }
 
@@ -406,15 +408,14 @@ export default function Home() {
                     <p className="mb-2 text-sm font-extrabold uppercase tracking-[0.2em] text-soil dark:text-leaf-300">Past Work Details</p>
                     <h3 className="font-display text-4xl font-extrabold">{selectedProject.title}</h3>
                   </div>
-                  <button onClick={() => setSelectedProject(null)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-leaf-900 shadow dark:bg-leaf-900 dark:text-white" aria-label="Close project details">
+                  <button onClick={() => setSelectedProject(null)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-leaf-900 shadow dark:bg-leaf-900/60" aria-label="Close project details">
                     <X size={20} />
                   </button>
                 </div>
                 <p className="leading-8 text-leaf-900/75 dark:text-leaf-100/80">{selectedProject.scope}</p>
-                <div className="my-6 grid gap-4 sm:grid-cols-3">
+                <div className="my-6 grid gap-4 sm:grid-cols-2">
                   <Detail label="Location" value={selectedProject.location} />
                   <Detail label="Duration" value={selectedProject.duration} />
-                  <Detail label="Package" value={selectedProject.budget} />
                 </div>
                 <div className="rounded-2xl bg-white p-5 shadow dark:bg-leaf-900/60">
                   <h4 className="mb-3 font-extrabold">Plants Used</h4>
@@ -428,6 +429,27 @@ export default function Home() {
                   <h4 className="mb-2 font-extrabold">Result</h4>
                   <p className="leading-7 text-leaf-900/70 dark:text-leaf-100/75">{selectedProject.result}</p>
                 </div>
+
+                {selectedProject.additionalImages && selectedProject.additionalImages.length > 0 && (
+                  <div className="mt-5 rounded-2xl bg-white p-5 shadow dark:bg-leaf-900/60">
+                    <h4 className="mb-3 font-extrabold">Additional Project Photos</h4>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                      {selectedProject.additionalImages.map((imgUrl, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => setActiveLightboxImage(imgUrl)}
+                          className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 cursor-pointer group shadow hover:shadow-md transition-all duration-300"
+                        >
+                          <img src={imgUrl} alt={`Additional ${idx + 1}`} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                          <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-white text-xs font-bold bg-leaf-700/80 px-2.5 py-1 rounded-full">Zoom</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 flex flex-wrap gap-3">
                   <a
                     href={whatsappLink(`Hello Kaveri Nursery, I saw your ${selectedProject.title} project and want to book a similar work.`)}
@@ -441,6 +463,32 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Lightbox Overlay */}
+      {activeLightboxImage && (
+        <div 
+          onClick={() => setActiveLightboxImage(null)}
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out backdrop-blur-sm transition-all duration-300"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative max-h-screen max-w-screen-lg flex items-center justify-center">
+            <button 
+              onClick={() => setActiveLightboxImage(null)} 
+              className="absolute -top-12 right-0 md:right-4 bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-colors focus:outline-none"
+              aria-label="Close image zoom"
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={activeLightboxImage} 
+              alt="Zoomed project image" 
+              className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl select-none" 
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

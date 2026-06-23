@@ -30,14 +30,15 @@ const emptyProjectForm = {
   category: 'Garden Design',
   location: '',
   duration: '',
-  budget: '',
   scope: '',
-  plantsUsed: '',
+  plantsUsed: [],
   result: '',
   before: '',
   after: '',
   beforeFile: null,
-  afterFile: null
+  afterFile: null,
+  additionalImages: [],
+  additionalImageFiles: []
 };
 
 export default function AdminDashboard() {
@@ -53,6 +54,8 @@ export default function AdminDashboard() {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [laboursCount, setLaboursCount] = useState(0);
+  const [plantSearchQuery, setPlantSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [previewBill, setPreviewBill] = useState(null);
   const [letterheadType, setLetterheadType] = useState(() => localStorage.getItem('letterheadType') || 'digital');
@@ -190,18 +193,29 @@ export default function AdminDashboard() {
         afterUrl = await getDownloadURL(afterRef);
       }
 
+      const uploadedAdditionalUrls = [];
+      if (projectForm.additionalImageFiles && projectForm.additionalImageFiles.length > 0) {
+        for (let i = 0; i < projectForm.additionalImageFiles.length; i++) {
+          const file = projectForm.additionalImageFiles[i];
+          const imgRef = ref(storage, `gallery/additional-${Date.now()}-${i}`);
+          await uploadBytes(imgRef, file);
+          const url = await getDownloadURL(imgRef);
+          uploadedAdditionalUrls.push(url);
+        }
+      }
+
       const projectData = {
         title: projectForm.title,
         category: projectForm.category,
         location: projectForm.location,
         duration: projectForm.duration,
-        budget: projectForm.budget,
         scope: projectForm.scope,
-        plantsUsed: (projectForm.plantsUsed || '').split(',').map((item) => item.trim()).filter(Boolean),
+        plantsUsed: projectForm.plantsUsed || [],
         result: projectForm.result || 'Successfully completed landscaping project.',
         beforeImage: beforeUrl,
         afterImage: afterUrl,
-        description: projectForm.result || 'Successfully completed landscaping project.'
+        description: projectForm.result || 'Successfully completed landscaping project.',
+        additionalImages: [...(projectForm.additionalImages || []), ...uploadedAdditionalUrls]
       };
 
       let savedId = editingProjectId;
@@ -239,14 +253,15 @@ export default function AdminDashboard() {
       category: project.category,
       location: project.location,
       duration: project.duration,
-      budget: project.budget,
       scope: project.scope,
-      plantsUsed: project.plantsUsed.join(', '),
+      plantsUsed: project.plantsUsed || [],
       result: project.result,
       before: project.before,
       after: project.after,
       beforeFile: null,
-      afterFile: null
+      afterFile: null,
+      additionalImages: project.additionalImages || [],
+      additionalImageFiles: []
     });
   };
 
@@ -266,6 +281,52 @@ export default function AdminDashboard() {
   const handleProjectImage = (field, file) => {
     if (!file) return;
     setProjectForm((current) => ({ ...current, [field]: URL.createObjectURL(file), [`${field}File`]: file }));
+  };
+
+  const handleRemovePlantTag = (plantName) => {
+    setProjectForm((current) => ({
+      ...current,
+      plantsUsed: current.plantsUsed.filter((p) => p !== plantName)
+    }));
+  };
+
+  const handleAddPlantTag = (plantName) => {
+    if (!plantName || !plantName.trim()) return;
+    const trimmed = plantName.trim();
+    setProjectForm((current) => {
+      if (current.plantsUsed.includes(trimmed)) return current;
+      return {
+        ...current,
+        plantsUsed: [...current.plantsUsed, trimmed]
+      };
+    });
+    setPlantSearchQuery('');
+    setShowSuggestions(false);
+  };
+
+  const handleAdditionalPhotosUpload = (files) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    setProjectForm((current) => ({
+      ...current,
+      additionalImageFiles: [...(current.additionalImageFiles || []), ...newFiles]
+    }));
+  };
+
+  const removeAdditionalImage = (type, index) => {
+    setProjectForm((current) => {
+      if (type === 'url') {
+        return {
+          ...current,
+          additionalImages: current.additionalImages.filter((_, idx) => idx !== index)
+        };
+      } else {
+        return {
+          ...current,
+          additionalImageFiles: current.additionalImageFiles.filter((_, idx) => idx !== index)
+        };
+      }
+    });
   };
 
   const billTotal = billForm.lines.reduce((sum, line) => sum + Number(line.qty || 0) * Number(line.rate || 0), 0);
@@ -617,8 +678,131 @@ export default function AdminDashboard() {
                   <input value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} placeholder="Location" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                   <input value={projectForm.duration} onChange={(e) => setProjectForm({ ...projectForm, duration: e.target.value })} placeholder="Duration" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                 </div>
-                <input value={projectForm.budget} onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })} placeholder="Package or budget type" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <input value={projectForm.plantsUsed} onChange={(e) => setProjectForm({ ...projectForm, plantsUsed: e.target.value })} placeholder="Plants used, comma separated" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                {/* Plants Used Component */}
+                <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent relative">
+                  <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Plants Used</label>
+                  
+                  {/* Selected Plants Tags */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {(!projectForm.plantsUsed || projectForm.plantsUsed.length === 0) ? (
+                      <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 italic">No plants added yet. Search below or type custom name.</span>
+                    ) : (
+                      projectForm.plantsUsed.map((plantName, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1.5 rounded-full bg-leaf-100 dark:bg-leaf-800 px-3 py-1 text-xs font-bold text-leaf-900 dark:text-leaf-100">
+                          {plantName}
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemovePlantTag(plantName)} 
+                            className="text-red-500 hover:text-red-700 font-extrabold focus:outline-none ml-1 text-sm"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <div className="flex items-center gap-2 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2">
+                        <Search size={16} className="text-leaf-900/40 dark:text-leaf-100/40" />
+                        <input 
+                          type="text" 
+                          value={plantSearchQuery} 
+                          onChange={(e) => {
+                            setPlantSearchQuery(e.target.value);
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => setShowSuggestions(true)}
+                          onBlur={() => {
+                            setTimeout(() => setShowSuggestions(false), 200);
+                          }}
+                          placeholder="Search plant inventory..." 
+                          className="w-full bg-transparent text-sm outline-none" 
+                        />
+                      </div>
+                      
+                      {/* Suggestions Dropdown */}
+                      {showSuggestions && plantSearchQuery.trim() && (
+                        <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-leaf-700/20 bg-white dark:bg-leaf-900 shadow-xl z-20">
+                          {inventory
+                            .filter(p => p.name.toLowerCase().includes(plantSearchQuery.toLowerCase()) && !projectForm.plantsUsed.includes(p.name))
+                            .map((plant) => (
+                              <button 
+                                type="button" 
+                                key={plant._id} 
+                                onClick={() => handleAddPlantTag(plant.name)}
+                                className="w-full text-left px-4 py-2 text-sm hover:bg-leaf-50 dark:hover:bg-leaf-800 transition-colors font-semibold"
+                              >
+                                {plant.name} <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 font-normal">({plant.category})</span>
+                              </button>
+                            ))
+                          }
+                          {inventory.filter(p => p.name.toLowerCase().includes(plantSearchQuery.toLowerCase()) && !projectForm.plantsUsed.includes(p.name)).length === 0 && (
+                            <div className="px-4 py-2 text-xs text-leaf-900/50 dark:text-leaf-100/50 italic">
+                              No matching plants in inventory. Click "Add Custom" to add as-typed.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddPlantTag(plantSearchQuery)}
+                      className="btn-secondary py-2 px-4 text-xs font-bold shrink-0"
+                    >
+                      Add Custom
+                    </button>
+                  </div>
+                </div>
+
+                {/* Additional Photos Section */}
+                <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent">
+                  <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Additional Project Photos</label>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {/* Display existing URLs */}
+                    {(projectForm.additionalImages || []).map((url, idx) => (
+                      <div key={`url-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
+                        <img src={url} alt="project extra" className="h-full w-full object-cover" />
+                        <button 
+                          type="button" 
+                          onClick={() => removeAdditionalImage('url', idx)}
+                          className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    {/* Display local file previews */}
+                    {(projectForm.additionalImageFiles || []).map((file, idx) => {
+                      const localUrl = URL.createObjectURL(file);
+                      return (
+                        <div key={`file-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
+                          <img src={localUrl} alt="project extra local" className="h-full w-full object-cover" />
+                          <button 
+                            type="button" 
+                            onClick={() => removeAdditionalImage('file', idx)}
+                            className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {/* Upload Trigger */}
+                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-leaf-700/30 hover:border-leaf-700/60 cursor-pointer bg-leaf-50/50 dark:bg-leaf-900/20 text-leaf-700 dark:text-leaf-300">
+                      <Plus size={20} />
+                      <span className="text-[10px] mt-1 text-center font-bold">Add Photo</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        multiple 
+                        className="hidden" 
+                        onChange={(e) => handleAdditionalPhotosUpload(e.target.files)} 
+                      />
+                    </label>
+                  </div>
+                </div>
                 <textarea value={projectForm.scope} onChange={(e) => setProjectForm({ ...projectForm, scope: e.target.value })} placeholder="Work details and scope" rows="4" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                 <textarea value={projectForm.result} onChange={(e) => setProjectForm({ ...projectForm, result: e.target.value })} placeholder="Project result shown on website" rows="3" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                 <div className="grid gap-3 md:grid-cols-2">
@@ -903,12 +1087,12 @@ function apiProjectToUi(project) {
     category: project.category,
     location: project.location || '',
     duration: project.duration || '',
-    budget: project.budget || '',
     scope: project.scope || project.description || '',
     plantsUsed: project.plantsUsed || [],
     result: project.result || project.description || '',
     before: project.beforeImage || project.image || '',
-    after: project.afterImage || project.image || ''
+    after: project.afterImage || project.image || '',
+    additionalImages: project.additionalImages || []
   };
 }
 
