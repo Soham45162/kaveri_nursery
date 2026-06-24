@@ -293,20 +293,28 @@ export default function AdminDashboard() {
 
     labours.forEach(labour => {
       const attRecord = attendance[labour.id] || {};
-      let full = 0, half = 0;
-      Object.values(attRecord).forEach(val => {
-        if (val === 'Full') full++;
-        if (val === 'Half') half++;
+      let full = 0, half = 0, custom = 0, customAmount = 0;
+      Object.keys(attRecord).forEach(key => {
+        if (!key.endsWith('_amount')) {
+          const val = attRecord[key];
+          if (val === 'Full') full++;
+          else if (val === 'Half') half++;
+          else if (val === 'Custom') {
+            custom++;
+            customAmount += Number(attRecord[`${key}_amount`] || 0);
+          }
+        }
       });
-      const workedDays = full + 0.5 * half;
+      const workedDays = full + 0.5 * half + custom;
+      const standardWorkedDays = full + 0.5 * half;
 
       const salaryType = labour.salaryType || 'daily';
       const salaryRate = Number(labour.salaryRate) || 0;
       let netSalary = 0;
       if (salaryType === 'monthly') {
-        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + customAmount;
       } else {
-        netSalary = Math.round(salaryRate * workedDays);
+        netSalary = Math.round(salaryRate * standardWorkedDays) + customAmount;
       }
 
       const labourAdvances = advances[labour.id] || [];

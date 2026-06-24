@@ -264,21 +264,64 @@ export default function LabourRegister() {
 
   // Attendance Toggle Statuses
   const toggleStatus = async (labourId, day) => {
+    const labour = labours.find(l => l.id === labourId);
     const currentStatus = attendance[labourId]?.[day];
     let nextStatus;
     
-    if (!currentStatus) nextStatus = 'Full';
-    else if (currentStatus === 'Full') nextStatus = 'Half';
-    else if (currentStatus === 'Half') nextStatus = 'Absent';
-    else nextStatus = null;
-
     const newAttendance = { ...attendance };
     if (!newAttendance[labourId]) newAttendance[labourId] = {};
-    
-    if (nextStatus) {
+
+    if (currentStatus === 'Custom') {
+      const edit = window.confirm(`Click OK to EDIT the custom wage (currently ₹${attendance[labourId][`${day}_amount`] || 0}) for ${labour?.name || 'worker'} on day ${day}.\nClick Cancel to CHANGE status to Absent.`);
+      if (edit) {
+        const defaultRate = attendance[labourId][`${day}_amount`] || labour?.salaryRate || '';
+        const amountStr = prompt(`Enter new custom wage amount (₹):`, defaultRate);
+        if (amountStr !== null) {
+          const amount = Number(amountStr);
+          if (!isNaN(amount) && amount >= 0) {
+            newAttendance[labourId][`${day}_amount`] = amount;
+            setAttendance(newAttendance);
+            try {
+              const docRef = doc(db, 'attendance', monthKey);
+              await setDoc(docRef, newAttendance, { merge: true });
+            } catch (err) {
+              console.error("Error updating custom wage amount in database:", err);
+            }
+          } else {
+            alert("Please enter a valid wage amount.");
+          }
+        }
+        return;
+      } else {
+        nextStatus = 'Absent';
+      }
+    } else {
+      if (!currentStatus) nextStatus = 'Full';
+      else if (currentStatus === 'Full') nextStatus = 'Half';
+      else if (currentStatus === 'Half') nextStatus = 'Custom';
+      else if (currentStatus === 'Absent') nextStatus = null;
+    }
+
+    if (nextStatus === 'Custom') {
+      const defaultRate = labour?.salaryRate || '';
+      const amountStr = prompt(`Enter custom salary amount for ${labour?.name || 'worker'} on day ${day} (default daily rate is ₹${defaultRate}):`, defaultRate);
+      if (amountStr === null) {
+        // User cancelled, remain on Half status
+        return;
+      }
+      const amount = Number(amountStr);
+      if (isNaN(amount) || amount < 0) {
+        alert("Please enter a valid salary amount.");
+        return;
+      }
+      newAttendance[labourId][day] = 'Custom';
+      newAttendance[labourId][`${day}_amount`] = amount;
+    } else if (nextStatus) {
       newAttendance[labourId][day] = nextStatus;
+      delete newAttendance[labourId][`${day}_amount`];
     } else {
       delete newAttendance[labourId][day];
+      delete newAttendance[labourId][`${day}_amount`];
     }
     
     setAttendance(newAttendance);
@@ -399,19 +442,27 @@ export default function LabourRegister() {
   // Helper Calculations
   const calculateTotals = (labourId) => {
     const record = attendance[labourId] || {};
-    let full = 0, half = 0, absent = 0;
-    Object.values(record).forEach(val => {
-      if (val === 'Full') full++;
-      if (val === 'Half') half++;
-      if (val === 'Absent') absent++;
+    let full = 0, half = 0, absent = 0, custom = 0, customAmount = 0;
+    Object.keys(record).forEach(key => {
+      if (!key.endsWith('_amount')) {
+        const val = record[key];
+        if (val === 'Full') full++;
+        else if (val === 'Half') half++;
+        else if (val === 'Absent') absent++;
+        else if (val === 'Custom') {
+          custom++;
+          customAmount += Number(record[`${key}_amount`] || 0);
+        }
+      }
     });
-    return { full, half, absent };
+    return { full, half, absent, custom, customAmount };
   };
 
   const getStatusColor = (status) => {
     if (status === 'Full') return 'bg-green-500 text-white shadow-sm';
     if (status === 'Half') return 'bg-amber-400 text-amber-950 shadow-sm font-bold';
     if (status === 'Absent') return 'bg-red-500 text-white shadow-sm';
+    if (status === 'Custom') return 'bg-purple-500 text-white shadow-sm font-bold';
     return 'bg-gray-100 hover:bg-gray-200 dark:bg-leaf-800 dark:hover:bg-leaf-700 dark:text-leaf-300';
   };
 
@@ -419,6 +470,7 @@ export default function LabourRegister() {
     if (status === 'Full') return 'F';
     if (status === 'Half') return 'H';
     if (status === 'Absent') return 'A';
+    if (status === 'Custom') return 'C';
     return '-';
   };
 
@@ -827,13 +879,14 @@ export default function LabourRegister() {
                   ))}
                   <th className="p-3 text-center border-r border-leaf-700/10 text-green-700 w-10">F</th>
                   <th className="p-3 text-center border-r border-leaf-700/10 text-amber-600 w-10">H</th>
-                  <th className="p-3 text-center border-leaf-700/10 text-red-600 w-10">A</th>
+                  <th className="p-3 text-center border-r border-leaf-700/10 text-red-600 w-10">A</th>
+                  <th className="p-3 text-center border-leaf-700/10 text-purple-750 dark:text-purple-300 w-10">C</th>
                 </tr>
               </thead>
               <tbody>
                 {labours.length === 0 ? (
                   <tr>
-                    <td colSpan={daysInMonth + 4} className="p-6 text-center text-gray-500">No registered workers found to record attendance.</td>
+                    <td colSpan={daysInMonth + 5} className="p-6 text-center text-gray-500">No registered workers found to record attendance.</td>
                   </tr>
                 ) : labours.map(labour => {
                   const totals = calculateTotals(labour.id);
@@ -850,6 +903,7 @@ export default function LabourRegister() {
                             <button 
                               onClick={() => toggleStatus(labour.id, day)}
                               className={`h-7 w-7 rounded font-extrabold text-xxs transition-all flex items-center justify-center mx-auto ${getStatusColor(status)} no-print-bg`}
+                              title={status === 'Custom' ? `Custom Wage: ₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : undefined}
                             >
                               {getStatusIcon(status)}
                             </button>
@@ -858,7 +912,8 @@ export default function LabourRegister() {
                       })}
                       <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-green-600">{totals.full}</td>
                       <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-amber-600">{totals.half}</td>
-                      <td className="p-3 text-center font-bold text-red-500">{totals.absent}</td>
+                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-red-500">{totals.absent}</td>
+                      <td className="p-3 text-center font-bold text-purple-650 dark:text-purple-400">{totals.custom}</td>
                     </tr>
                   )
                 })}
@@ -870,7 +925,8 @@ export default function LabourRegister() {
             <span className="flex items-center gap-2"><div className="w-5 h-5 bg-green-500 rounded shadow-sm"></div> Full Day (F)</span>
             <span className="flex items-center gap-2"><div className="w-5 h-5 bg-amber-400 rounded shadow-sm"></div> Half Day (H)</span>
             <span className="flex items-center gap-2"><div className="w-5 h-5 bg-red-500 rounded shadow-sm"></div> Absent (A)</span>
-            <span className="flex items-center gap-2 ml-4 text-gray-400 italic">Tip: Click cells in columns to toggle states.</span>
+            <span className="flex items-center gap-2"><div className="w-5 h-5 bg-purple-500 rounded shadow-sm"></div> Custom Wage (C)</span>
+            <span className="flex items-center gap-2 ml-4 text-gray-400 italic">Tip: Click cells in columns to toggle states. Custom Wage cells show details on hover.</span>
           </div>
         </div>
       )}
@@ -933,7 +989,8 @@ export default function LabourRegister() {
                   </tr>
                 ) : labours.map(labour => {
                   const totals = calculateTotals(labour.id);
-                  const workedDays = totals.full + 0.5 * totals.half;
+                  const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                  const standardWorkedDays = totals.full + 0.5 * totals.half;
                   
                   const salaryType = labour.salaryType || 'daily';
                   const salaryRate = labour.salaryRate || 0;
@@ -944,11 +1001,11 @@ export default function LabourRegister() {
                   
                   if (salaryType === 'monthly') {
                     grossSalary = salaryRate;
-                    netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                    netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                     salaryCut = grossSalary - netSalary;
                   } else {
-                    grossSalary = Math.round(salaryRate * daysInMonth);
-                    netSalary = Math.round(salaryRate * workedDays);
+                    grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
+                    netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
                     salaryCut = grossSalary - netSalary;
                   }
                   
@@ -1086,6 +1143,7 @@ export default function LabourRegister() {
                       <th className="p-3 text-center">Full Days (F)</th>
                       <th className="p-3 text-center">Half Days (H)</th>
                       <th className="p-3 text-center">Absent Days (A)</th>
+                      <th className="p-3 text-center">Custom Days (C)</th>
                       <th className="p-3 text-center">Total Worked Days</th>
                       <th className="p-3 text-right">Attendance %</th>
                     </tr>
@@ -1093,11 +1151,11 @@ export default function LabourRegister() {
                   <tbody>
                     {labours.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="p-4 text-center text-gray-500 dark:text-leaf-300">No attendance reports available.</td>
+                        <td colSpan="8" className="p-4 text-center text-gray-500 dark:text-leaf-300">No attendance reports available.</td>
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half;
+                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
                       const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
                       return (
                         <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
@@ -1106,6 +1164,7 @@ export default function LabourRegister() {
                           <td className="p-3 text-center text-green-700 dark:text-green-400 font-semibold">{totals.full}</td>
                           <td className="p-3 text-center text-amber-600 dark:text-amber-300 font-semibold">{totals.half}</td>
                           <td className="p-3 text-center text-red-600 dark:text-red-400 font-semibold">{totals.absent}</td>
+                          <td className="p-3 text-center text-purple-650 dark:text-purple-400 font-semibold">{totals.custom || 0}</td>
                           <td className="p-3 text-center font-bold">{workedDays} Days</td>
                           <td className="p-3 text-right font-extrabold text-gray-800 dark:text-leaf-100">{attendancePercent}%</td>
                         </tr>
@@ -1141,7 +1200,8 @@ export default function LabourRegister() {
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half;
+                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                      const standardWorkedDays = totals.full + 0.5 * totals.half;
                       const salaryRate = labour.salaryRate || 0;
                       const salaryType = labour.salaryType || 'daily';
                       
@@ -1151,11 +1211,11 @@ export default function LabourRegister() {
                       
                       if (salaryType === 'monthly') {
                         grossSalary = salaryRate;
-                        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                         salaryCut = grossSalary - netSalary;
                       } else {
-                        grossSalary = Math.round(salaryRate * daysInMonth);
-                        netSalary = Math.round(salaryRate * workedDays);
+                        grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
+                        netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
                         salaryCut = grossSalary - netSalary;
                       }
                       
@@ -1335,16 +1395,17 @@ export default function LabourRegister() {
                       </tr>
                     ) : labours.map(labour => {
                       const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half;
+                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                      const standardWorkedDays = totals.full + 0.5 * totals.half;
                       const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
                       
                       const salaryType = labour.salaryType || 'daily';
                       const salaryRate = labour.salaryRate || 0;
                       let netSalary = 0;
                       if (salaryType === 'monthly') {
-                        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+                        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                       } else {
-                        netSalary = Math.round(salaryRate * workedDays);
+                        netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
                       }
 
                       const rating = getPerformanceRating(workedDays);
@@ -1744,9 +1805,9 @@ export default function LabourRegister() {
                 </div>
 
                 {/* Attendance Summary */}
-                <div className="bg-gray-50 p-3 rounded-lg mb-4 text-xxs border">
+                <div className="bg-gray-55 p-3 rounded-lg mb-4 text-xxs border">
                   <h4 className="font-black mb-1.5 text-gray-500 uppercase tracking-wider">Attendance Breakdown</h4>
-                  <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="grid grid-cols-5 gap-2 text-center">
                     <div>
                       <span className="block text-gray-400">Full Days</span>
                       <strong className="text-sm text-green-700">{calculateTotals(viewingSlipLabour.id).full}</strong>
@@ -1760,9 +1821,13 @@ export default function LabourRegister() {
                       <strong className="text-sm text-red-600">{calculateTotals(viewingSlipLabour.id).absent}</strong>
                     </div>
                     <div>
+                      <span className="block text-gray-400">Custom Days</span>
+                      <strong className="text-sm text-purple-600">{calculateTotals(viewingSlipLabour.id).custom || 0}</strong>
+                    </div>
+                    <div>
                       <span className="block text-gray-400">Worked Days</span>
                       <strong className="text-sm text-blue-700">
-                        {calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half} / {daysInMonth}
+                        {calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half + (calculateTotals(viewingSlipLabour.id).custom || 0)} / {daysInMonth}
                       </strong>
                     </div>
                   </div>
@@ -1781,9 +1846,15 @@ export default function LabourRegister() {
                     <tr className="border-b">
                       <td className="p-2 font-semibold">Gross Salary Rate</td>
                       <td className="p-2 text-right">
-                        {viewingSlipLabour.salaryType === 'monthly'
-                          ? Number(viewingSlipLabour.salaryRate || 0).toLocaleString()
-                          : Math.round(Number(viewingSlipLabour.salaryRate || 0) * daysInMonth).toLocaleString()}
+                        {(() => {
+                          const totals = calculateTotals(viewingSlipLabour.id);
+                          const rate = Number(viewingSlipLabour.salaryRate || 0);
+                          if (viewingSlipLabour.salaryType === 'monthly') {
+                            return rate.toLocaleString();
+                          } else {
+                            return Math.round(rate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0)).toLocaleString();
+                          }
+                        })()}
                       </td>
                       <td className="p-2 text-right">-</td>
                     </tr>
@@ -1792,16 +1863,17 @@ export default function LabourRegister() {
                       <td className="p-2 text-right">-</td>
                       <td className="p-2 text-right text-red-600">
                         {(() => {
-                          const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                          const totals = calculateTotals(viewingSlipLabour.id);
+                          const standardWorkedDays = totals.full + 0.5 * totals.half;
                           const rate = Number(viewingSlipLabour.salaryRate || 0);
                           let gross = 0;
                           let net = 0;
                           if (viewingSlipLabour.salaryType === 'monthly') {
                             gross = rate;
-                            net = Math.round((rate / daysInMonth) * workedDays);
+                            net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                           } else {
-                            gross = rate * daysInMonth;
-                            net = rate * workedDays;
+                            gross = rate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0);
+                            net = rate * standardWorkedDays + (totals.customAmount || 0);
                           }
                           return Math.round(gross - net).toLocaleString();
                         })()}
@@ -1811,13 +1883,14 @@ export default function LabourRegister() {
                       <td className="p-2">Net Salary Earned</td>
                       <td className="p-2 text-right text-green-700">
                         {(() => {
-                          const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                          const totals = calculateTotals(viewingSlipLabour.id);
+                          const standardWorkedDays = totals.full + 0.5 * totals.half;
                           const rate = Number(viewingSlipLabour.salaryRate || 0);
                           let net = 0;
                           if (viewingSlipLabour.salaryType === 'monthly') {
-                            net = Math.round((rate / daysInMonth) * workedDays);
+                            net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                           } else {
-                            net = rate * workedDays;
+                            net = rate * standardWorkedDays + (totals.customAmount || 0);
                           }
                           return net.toLocaleString();
                         })()}
@@ -1842,13 +1915,14 @@ export default function LabourRegister() {
                       <td className="p-2">Balance Salary Due</td>
                       <td className="p-2 text-right text-blue-700" colSpan="2">
                         {(() => {
-                          const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                          const totals = calculateTotals(viewingSlipLabour.id);
+                          const standardWorkedDays = totals.full + 0.5 * totals.half;
                           const rate = Number(viewingSlipLabour.salaryRate || 0);
                           let net = 0;
                           if (viewingSlipLabour.salaryType === 'monthly') {
-                            net = Math.round((rate / daysInMonth) * workedDays);
+                            net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                           } else {
-                            net = rate * workedDays;
+                            net = rate * standardWorkedDays + (totals.customAmount || 0);
                           }
                           const totalAdv = (advances[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0);
                           const totalPaid = (payments[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0);
@@ -1927,7 +2001,7 @@ export default function LabourRegister() {
                 <strong className="text-lg text-gray-900">{viewingSlipLabour.phone || 'N/A'}</strong>
               </div>
               <div>
-                <span className="text-gray-500 block">Salary Configuration:</span>
+                <span className="text-gray-505 block">Salary Configuration:</span>
                 <strong className="text-lg text-gray-900">
                   ₹{Number(viewingSlipLabour.salaryRate || 0).toLocaleString()} / {viewingSlipLabour.salaryType === 'monthly' ? 'Month' : 'Day'}
                 </strong>
@@ -1938,7 +2012,7 @@ export default function LabourRegister() {
           {/* Attendance Summary */}
           <div className="bg-gray-100 p-4 rounded-lg mb-6 text-sm">
             <h4 className="font-bold mb-2 text-gray-700 uppercase">Attendance Summary</h4>
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-5 gap-4 text-center">
               <div>
                 <span className="block text-gray-500">Full Days</span>
                 <strong className="text-base text-green-700">{calculateTotals(viewingSlipLabour.id).full}</strong>
@@ -1948,13 +2022,17 @@ export default function LabourRegister() {
                 <strong className="text-base text-yellow-600">{calculateTotals(viewingSlipLabour.id).half}</strong>
               </div>
               <div>
-                <span className="block text-gray-500">Absent Days</span>
+                <span className="block text-gray-505">Absent Days</span>
                 <strong className="text-base text-red-600">{calculateTotals(viewingSlipLabour.id).absent}</strong>
               </div>
               <div>
-                <span className="block text-gray-500">Worked Days</span>
+                <span className="block text-gray-505">Custom Days</span>
+                <strong className="text-base text-purple-650">{calculateTotals(viewingSlipLabour.id).custom || 0}</strong>
+              </div>
+              <div>
+                <span className="block text-gray-505">Worked Days</span>
                 <strong className="text-base text-blue-700">
-                  {calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half} / {daysInMonth}
+                  {calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half + (calculateTotals(viewingSlipLabour.id).custom || 0)} / {daysInMonth}
                 </strong>
               </div>
             </div>
@@ -1973,9 +2051,15 @@ export default function LabourRegister() {
               <tr className="border-b border-gray-200">
                 <td className="p-3 font-semibold">Gross Salary (Based on month duration)</td>
                 <td className="p-3 text-right">
-                  {viewingSlipLabour.salaryType === 'monthly'
-                    ? Number(viewingSlipLabour.salaryRate || 0).toLocaleString()
-                    : Math.round(Number(viewingSlipLabour.salaryRate || 0) * daysInMonth).toLocaleString()}
+                  {(() => {
+                    const totals = calculateTotals(viewingSlipLabour.id);
+                    const rate = Number(viewingSlipLabour.salaryRate || 0);
+                    if (viewingSlipLabour.salaryType === 'monthly') {
+                      return rate.toLocaleString();
+                    } else {
+                      return Math.round(rate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0)).toLocaleString();
+                    }
+                  })()}
                 </td>
                 <td className="p-3 text-right">-</td>
               </tr>
@@ -1984,16 +2068,17 @@ export default function LabourRegister() {
                 <td className="p-3 text-right">-</td>
                 <td className="p-3 text-right text-red-650 font-semibold">
                   {(() => {
-                    const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                    const totals = calculateTotals(viewingSlipLabour.id);
+                    const standardWorkedDays = totals.full + 0.5 * totals.half;
                     const rate = Number(viewingSlipLabour.salaryRate || 0);
                     let gross = 0;
                     let net = 0;
                     if (viewingSlipLabour.salaryType === 'monthly') {
                       gross = rate;
-                      net = Math.round((rate / daysInMonth) * workedDays);
+                      net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                     } else {
-                      gross = rate * daysInMonth;
-                      net = rate * workedDays;
+                      gross = rate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0);
+                      net = rate * standardWorkedDays + (totals.customAmount || 0);
                     }
                     return Math.round(gross - net).toLocaleString();
                   })()}
@@ -2003,13 +2088,14 @@ export default function LabourRegister() {
                 <td className="p-3">Net Salary Earned</td>
                 <td className="p-3 text-right text-green-700">
                   {(() => {
-                    const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                    const totals = calculateTotals(viewingSlipLabour.id);
+                    const standardWorkedDays = totals.full + 0.5 * totals.half;
                     const rate = Number(viewingSlipLabour.salaryRate || 0);
                     let net = 0;
                     if (viewingSlipLabour.salaryType === 'monthly') {
-                      net = Math.round((rate / daysInMonth) * workedDays);
+                      net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                     } else {
-                      net = rate * workedDays;
+                      net = rate * standardWorkedDays + (totals.customAmount || 0);
                     }
                     return net.toLocaleString();
                   })()}
@@ -2017,7 +2103,7 @@ export default function LabourRegister() {
                 <td className="p-3 text-right">-</td>
               </tr>
               <tr className="border-b border-gray-200">
-                <td className="p-3 text-amber-800 font-semibold">Salary Advances Taken (Deducted)</td>
+                <td className="p-3 text-amber-805 font-semibold">Salary Advances Taken (Deducted)</td>
                 <td className="p-3 text-right">-</td>
                 <td className="p-3 text-right font-bold text-amber-700">
                   {Number((advances[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0)).toLocaleString()}
@@ -2034,13 +2120,14 @@ export default function LabourRegister() {
                 <td className="p-3">Balance Salary Due</td>
                 <td className="p-3 text-right text-blue-700" colSpan="2">
                   {(() => {
-                    const workedDays = calculateTotals(viewingSlipLabour.id).full + 0.5 * calculateTotals(viewingSlipLabour.id).half;
+                    const totals = calculateTotals(viewingSlipLabour.id);
+                    const standardWorkedDays = totals.full + 0.5 * totals.half;
                     const rate = Number(viewingSlipLabour.salaryRate || 0);
                     let net = 0;
                     if (viewingSlipLabour.salaryType === 'monthly') {
-                      net = Math.round((rate / daysInMonth) * workedDays);
+                      net = Math.round((rate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
                     } else {
-                      net = rate * workedDays;
+                      net = rate * standardWorkedDays + (totals.customAmount || 0);
                     }
                     const totalAdv = (advances[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0);
                     const totalPaid = (payments[viewingSlipLabour.id] || []).reduce((sum, tx) => sum + tx.amount, 0);
