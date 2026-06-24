@@ -904,10 +904,10 @@ export default function LabourRegister() {
                           <td key={day} className="border-r border-leaf-700/10 p-1 text-center">
                             <button 
                               onClick={() => toggleStatus(labour.id, day)}
-                              className={`h-7 w-7 rounded font-extrabold text-xxs transition-all flex items-center justify-center mx-auto ${getStatusColor(status)} no-print-bg`}
+                              className={`h-7 rounded font-bold text-[9px] transition-all flex items-center justify-center mx-auto ${status === 'Custom' ? 'w-auto px-1 min-w-[28px]' : 'w-7'} ${getStatusColor(status)} no-print-bg`}
                               title={status === 'Custom' ? `Custom Wage: ₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : undefined}
                             >
-                              {getStatusIcon(status)}
+                              {status === 'Custom' ? `₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : getStatusIcon(status)}
                             </button>
                           </td>
                         )
