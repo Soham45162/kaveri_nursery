@@ -1,10 +1,20 @@
-import { BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { 
+  BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, 
+  LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users,
+  Coins, DollarSign, TrendingUp, Calendar, AlertTriangle
+} from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
 import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, storage } from '../config/firebase.js';
 import LabourRegister from '../components/LabourRegister.jsx';
+import { 
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell 
+} from 'recharts';
+
+const COLORS = ['#2d6f2c', '#10b981', '#06b6d4', '#f59e0b', '#ec4899', '#8b5cf6'];
 
 const emptyBillLine = { plantName: '', qty: 1, rate: 0 };
 const emptyBillForm = {
@@ -43,6 +53,7 @@ const emptyProjectForm = {
 
 export default function AdminDashboard() {
   const { logout, token, user } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'plants', 'billing', 'projects', 'reviews', 'labour'
   const [inventory, setInventory] = useState([]);
   const [adminReviews, setAdminReviews] = useState([]);
   const [managedProjects, setManagedProjects] = useState([]);
@@ -54,6 +65,22 @@ export default function AdminDashboard() {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [laboursCount, setLaboursCount] = useState(0);
+  const [labours, setLabours] = useState([]);
+  const [plantFilterQuery, setPlantFilterQuery] = useState('');
+  
+  // Labour Ledger Data States
+  const [attendance, setAttendance] = useState({});
+  const [payments, setPayments] = useState({});
+  const [advances, setAdvances] = useState({});
+  const [currentAnalyticsDate, setCurrentAnalyticsDate] = useState(new Date());
+  const [refetchIndex, setRefetchIndex] = useState(0);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    if (tabId === 'overview') {
+      setRefetchIndex(prev => prev + 1);
+    }
+  };
   const [plantSearchQuery, setPlantSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -125,7 +152,31 @@ export default function AdminDashboard() {
         }
 
         const labSnap = await getDocs(collection(db, 'labours'));
-        setLaboursCount(labSnap.size);
+        const laboursData = labSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        setLabours(laboursData);
+        setLaboursCount(laboursData.length);
+
+        const year = currentAnalyticsDate.getFullYear();
+        const month = currentAnalyticsDate.getMonth();
+        const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+        try {
+          const attSnap = await getDoc(doc(db, 'attendance', monthKey));
+          if (attSnap.exists()) setAttendance(attSnap.data());
+          else setAttendance({});
+        } catch (e) { console.error("Error fetching attendance:", e); }
+
+        try {
+          const paySnap = await getDoc(doc(db, 'payments', monthKey));
+          if (paySnap.exists()) setPayments(paySnap.data());
+          else setPayments({});
+        } catch (e) { console.error("Error fetching payments:", e); }
+
+        try {
+          const advSnap = await getDoc(doc(db, 'advances', monthKey));
+          if (advSnap.exists()) setAdvances(advSnap.data());
+          else setAdvances({});
+        } catch (e) { console.error("Error fetching advances:", e); }
 
         try {
           const settingsSnap = await getDoc(doc(db, 'settings', 'billing'));
@@ -148,7 +199,212 @@ export default function AdminDashboard() {
       }
     }
     loadData();
-  }, []);
+  }, [currentAnalyticsDate, refetchIndex]);
+
+  const todaySalesStats = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+    const todayVal = bills
+      .filter(b => b.date === todayStr)
+      .reduce((sum, b) => sum + (Number(b.total) || 0), 0);
+
+    const yesterdayVal = bills
+      .filter(b => b.date === yesterdayStr)
+      .reduce((sum, b) => sum + (Number(b.total) || 0), 0);
+
+    const diff = todayVal - yesterdayVal;
+    const pct = yesterdayVal > 0 ? (diff / yesterdayVal) * 100 : todayVal > 0 ? 100 : 0;
+
+    return {
+      total: todayVal,
+      yesterday: yesterdayVal,
+      pct: pct.toFixed(1),
+      trend: diff >= 0 ? 'up' : 'down'
+    };
+  }, [bills]);
+
+  const monthlyRevenueStats = useMemo(() => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const currentVal = bills
+      .filter(b => {
+        if (!b.date) return false;
+        const bDate = new Date(b.date);
+        return b.type === 'Bill' && bDate.getMonth() === currentMonth && bDate.getFullYear() === currentYear;
+      })
+      .reduce((sum, b) => sum + (Number(b.total) || 0), 0);
+
+    const lastMonthVal = bills
+      .filter(b => {
+        if (!b.date) return false;
+        const bDate = new Date(b.date);
+        return b.type === 'Bill' && bDate.getMonth() === lastMonth && bDate.getFullYear() === lastMonthYear;
+      })
+      .reduce((sum, b) => sum + (Number(b.total) || 0), 0);
+
+    const diff = currentVal - lastMonthVal;
+    const pct = lastMonthVal > 0 ? (diff / lastMonthVal) * 100 : currentVal > 0 ? 100 : 0;
+
+    return {
+      total: currentVal,
+      lastMonth: lastMonthVal,
+      pct: pct.toFixed(1),
+      trend: diff >= 0 ? 'up' : 'down'
+    };
+  }, [bills]);
+
+  const lowStockCount = useMemo(() => {
+    return inventory.filter(p => Number(p.stock) <= 10).length;
+  }, [inventory]);
+
+  const pendingReviewsCount = useMemo(() => {
+    return adminReviews.filter(r => !r.approved).length;
+  }, [adminReviews]);
+
+  const inventoryBreakdown = useMemo(() => {
+    const categories = ['Indoor', 'Outdoor', 'Flowering', 'Medicinal', 'Fruit', 'Farm'];
+    const breakdown = {};
+    categories.forEach(cat => {
+      const matched = inventory.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase());
+      breakdown[cat] = {
+        count: matched.length,
+        stock: matched.reduce((sum, p) => sum + (Number(p.stock) || 0), 0)
+      };
+    });
+    return breakdown;
+  }, [inventory]);
+
+  const payrollStats = useMemo(() => {
+    const year = currentAnalyticsDate.getFullYear();
+    const month = currentAnalyticsDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let totalSalaryPaid = 0;
+    let totalAdvancesGiven = 0;
+    let totalOutstandingBalance = 0;
+
+    labours.forEach(labour => {
+      const attRecord = attendance[labour.id] || {};
+      let full = 0, half = 0;
+      Object.values(attRecord).forEach(val => {
+        if (val === 'Full') full++;
+        if (val === 'Half') half++;
+      });
+      const workedDays = full + 0.5 * half;
+
+      const salaryType = labour.salaryType || 'daily';
+      const salaryRate = Number(labour.salaryRate) || 0;
+      let netSalary = 0;
+      if (salaryType === 'monthly') {
+        netSalary = Math.round((salaryRate / daysInMonth) * workedDays);
+      } else {
+        netSalary = Math.round(salaryRate * workedDays);
+      }
+
+      const labourAdvances = advances[labour.id] || [];
+      const totalAdvance = labourAdvances.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const netPayable = netSalary - totalAdvance;
+
+      const labourPayments = payments[labour.id] || [];
+      const totalPaid = labourPayments.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const balanceDue = netPayable - totalPaid;
+
+      totalSalaryPaid += totalPaid;
+      totalAdvancesGiven += totalAdvance;
+      totalOutstandingBalance += balanceDue;
+    });
+
+    return {
+      paid: totalSalaryPaid,
+      advances: totalAdvancesGiven,
+      outstanding: totalOutstandingBalance
+    };
+  }, [labours, attendance, advances, payments, currentAnalyticsDate]);
+
+  const last30DaysSalesData = useMemo(() => {
+    const data = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      
+      const dailySum = bills
+        .filter(b => b.date === dateStr)
+        .reduce((sum, b) => sum + (Number(b.total) || 0), 0);
+
+      data.push({
+        date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        sales: dailySum,
+        dateRaw: dateStr
+      });
+    }
+    return data;
+  }, [bills]);
+
+  const cumulativeRevenueData = useMemo(() => {
+    let currentSum = 0;
+    return last30DaysSalesData.map(item => {
+      currentSum += item.sales;
+      return {
+        date: item.date,
+        revenue: currentSum
+      };
+    });
+  }, [last30DaysSalesData]);
+
+  const monthlyGrowthData = useMemo(() => {
+    const monthsData = {};
+    const today = new Date();
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthsData[mKey] = {
+        monthName: d.toLocaleString('default', { month: 'short' }),
+        sales: 0
+      };
+    }
+    
+    bills.forEach(b => {
+      if (!b.date) return;
+      const bDate = new Date(b.date);
+      const mKey = `${bDate.getFullYear()}-${String(bDate.getMonth() + 1).padStart(2, '0')}`;
+      if (monthsData[mKey]) {
+        monthsData[mKey].sales += (Number(b.total) || 0);
+      }
+    });
+    
+    return Object.values(monthsData);
+  }, [bills]);
+
+  const categoryPieData = useMemo(() => {
+    const counts = {};
+    inventory.forEach(p => {
+      const cat = p.category || 'Other';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.keys(counts).map(cat => ({
+      name: cat,
+      value: counts[cat]
+    }));
+  }, [inventory]);
+
+  const filteredInventory = useMemo(() => {
+    return inventory.filter(plant => 
+      plant.name.toLowerCase().includes(plantFilterQuery.toLowerCase()) ||
+      (plant.scientificName || '').toLowerCase().includes(plantFilterQuery.toLowerCase()) ||
+      plant.category.toLowerCase().includes(plantFilterQuery.toLowerCase())
+    );
+  }, [inventory, plantFilterQuery]);
 
   const approveReview = async (id) => {
     try {
@@ -435,430 +691,767 @@ export default function AdminDashboard() {
             </div>
             <button onClick={logout} className="btn-secondary"><LogOut size={18} /> Logout</button>
           </div>
-
-          <div className="mb-8 grid gap-5 md:grid-cols-4">
-            <Metric icon={ShoppingBag} label="Monthly Sales" value={`₹${monthlySales.toLocaleString()}`} />
-            <Metric icon={Users} label="Visitors" value={visitorsCount >= 1000 ? (visitorsCount/1000).toFixed(1) + 'K' : visitorsCount} />
-            <Metric icon={Package} label="Inventory" value={inventory.length} />
-            <Metric icon={BriefcaseBusiness} label="Labours" value={laboursCount} />
-          </div>
-
-          <div className="grid gap-8 xl:grid-cols-[1fr_0.7fr]">
-            <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <h2 className="flex items-center gap-2 text-2xl font-extrabold"><Leaf /> Plant Management</h2>
-                <label className="hidden items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 dark:bg-[#0c2411] md:flex">
-                  <Search size={17} />
-                  <input placeholder="Search inventory" className="bg-transparent outline-none" />
-                </label>
-              </div>
-              <div className="overflow-auto">
-                <table className="w-full min-w-[760px] text-left">
-                  <thead className="bg-leaf-50 text-sm uppercase tracking-[0.12em] dark:bg-[#0c2411]">
-                    <tr>
-                      <th className="p-4">Plant</th>
-                      <th className="p-4">Category</th>
-                      <th className="p-4">Price</th>
-                      <th className="p-4">Stock</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inventory.map((plant) => (
-                      <tr key={plant._id} className="border-b border-leaf-700/10">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <img src={plant.image} alt={plant.name} className="h-12 w-12 rounded-xl object-cover" />
-                            <div><p className="font-bold">{plant.name}</p><p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">{plant.description}</p></div>
-                          </div>
-                        </td>
-                        <td className="p-4">{plant.category}</td>
-                        <td className="p-4">₹{plant.price}</td>
-                        <td className="p-4">{plant.stock}</td>
-                        <td className="p-4"><span className="rounded-full bg-leaf-100 px-3 py-1 text-sm font-bold text-leaf-800 dark:bg-leaf-700 dark:text-white">Available</span></td>
-                        <td className="p-4">
-                          <div className="flex gap-2">
-                            <button className="grid h-9 w-9 place-items-center rounded-full bg-leaf-100 text-leaf-900"><Edit size={16} /></button>
-                            <button onClick={() => removePlant(plant._id)} className="grid h-9 w-9 place-items-center rounded-full bg-red-100 text-red-700"><Trash2 size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* Main Tabbed Grid Layout */}
+          <div className="flex flex-col lg:flex-row gap-8 mt-6">
+            
+            {/* Sidebar Navigation */}
+            <div className="w-full lg:w-64 shrink-0 no-print">
+              <div className="glass rounded-[2rem] p-4 flex flex-col gap-1 sticky top-28">
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-soil dark:text-leaf-300 px-4 py-2.5 border-b border-leaf-700/5 mb-2">Management Tabs</p>
+                <TabButton id="overview" icon={BarChart3} label="Overview & Stats" activeTab={activeTab} onClick={handleTabChange} />
+                <TabButton id="plants" icon={Leaf} label="Plant Inventory" activeTab={activeTab} onClick={handleTabChange} />
+                <TabButton id="billing" icon={FileText} label="Billing System" activeTab={activeTab} onClick={handleTabChange} />
+                <TabButton id="projects" icon={BriefcaseBusiness} label="Past Work Projects" activeTab={activeTab} onClick={handleTabChange} />
+                <TabButton id="labour" icon={Users} label="Labour ERP" activeTab={activeTab} onClick={handleTabChange} />
+                <TabButton id="reviews" icon={Star} label="Review Approvals" activeTab={activeTab} onClick={handleTabChange} />
               </div>
             </div>
 
-            <aside className="space-y-6">
-              <form onSubmit={addPlant} className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-                <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold"><Plus /> Add New Plant</h2>
-                <div className="grid gap-3">
-                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                  <input value={form.scientificName} onChange={(e) => setForm({ ...form, scientificName: e.target.value })} placeholder="Scientific name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
-                    <option>Indoor</option><option>Outdoor</option><option>Flowering</option><option>Fruit</option><option>Medicinal</option>
-                  </select>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                    <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="Stock" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                  </div>
-                  <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-leaf-700/40 px-4 py-6 font-bold text-leaf-700 dark:text-leaf-300">
-                    <Image size={18} /> {form.imageFile ? "Image Selected" : "Upload plant image"}
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => setForm({...form, imageFile: e.target.files[0]})} />
-                  </label>
-                  <button className="btn-primary"><Plus size={18} /> Save Plant</button>
-                </div>
-              </form>
-
-              <Panel title="Review Approvals" icon={Star}>
-                {adminReviews.length === 0 && <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">No reviews found.</p>}
-                {adminReviews.map((review) => (
-                  <div key={review.id} className="mb-3 rounded-xl bg-leaf-50 p-4 dark:bg-[#0c2411]">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="font-bold">{review.name}</p>
-                      {review.approved ? <span className="text-xs font-bold text-leaf-700 dark:text-leaf-300">Approved</span> : <span className="text-xs font-bold text-yellow-600">Pending</span>}
+            {/* Content Panels */}
+            <div className="flex-1 min-w-0">
+              
+              {/* Tab 1: Analytics Overview */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6 animate-in fade-in duration-350">
+                  
+                  {/* Monthly Period selector and title */}
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                    <div className="text-left">
+                      <h2 className="text-3xl font-extrabold text-leaf-900 dark:text-white flex items-center gap-2">
+                        <BarChart3 className="text-leaf-600 dark:text-leaf-350" /> Analytics Dashboard
+                      </h2>
+                      <p className="text-xs text-leaf-900/60 dark:text-leaf-100/70 mt-1">Real-time KPI metric tracking, interactive sales charting, category breakups, and labor payroll cost tracker.</p>
                     </div>
-                    <p className="line-clamp-2 text-sm text-leaf-900/70 dark:text-leaf-100/75">{review.text}</p>
-                    <div className="mt-3 flex gap-2">
-                      {!review.approved && (
-                        <button onClick={() => approveReview(review.id)} type="button" className="rounded-full bg-leaf-700 px-3 py-1 text-sm font-bold text-white"><Check size={14} className="inline" /> Approve</button>
-                      )}
-                      <button onClick={() => deleteReview(review.id)} type="button" className="rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700">Delete</button>
+                    <div className="flex items-center gap-2 bg-white dark:bg-leaf-900 px-3 py-1.5 rounded-xl border border-leaf-700/10 shrink-0">
+                      <span className="text-xs font-bold uppercase tracking-wider text-leaf-900/60 dark:text-leaf-100/60">Period:</span>
+                      <input 
+                        type="month" 
+                        value={`${currentAnalyticsDate.getFullYear()}-${String(currentAnalyticsDate.getMonth() + 1).padStart(2, '0')}`} 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setCurrentAnalyticsDate(new Date(e.target.value + '-01T00:00:00'));
+                          }
+                        }}
+                        className="bg-transparent font-bold outline-none text-sm dark:text-white" 
+                      />
                     </div>
                   </div>
-                ))}
-              </Panel>
-            </aside>
-          </div>
 
-
-
-          <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_0.75fr]">
-            <form onSubmit={saveBill} className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-              <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                <h2 className="flex items-center gap-2 text-2xl font-extrabold"><FileText /> Billing System</h2>
-                <select value={billForm.type} onChange={(event) => setBillForm({ ...billForm, type: event.target.value })} className="rounded-full border border-leaf-700/20 bg-transparent px-4 py-2 font-bold outline-none">
-                  <option>Quotation</option>
-                  <option>Bill</option>
-                </select>
-              </div>
-
-              <div className="mb-5 grid gap-3 md:grid-cols-3">
-                <input value={billForm.customerName} onChange={(event) => setBillForm({ ...billForm, customerName: event.target.value })} placeholder="Customer name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <input value={billForm.customerPhone} onChange={(event) => setBillForm({ ...billForm, customerPhone: event.target.value })} placeholder="Customer phone" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <input type="date" value={billForm.date} onChange={(event) => setBillForm({ ...billForm, date: event.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-              </div>
-
-              <div className="overflow-auto rounded-2xl border border-leaf-700/10">
-                <table className="w-full min-w-[760px] text-left">
-                  <thead className="bg-leaf-50 text-sm uppercase tracking-[0.12em] dark:bg-[#0c2411]">
-                    <tr>
-                      <th className="p-4">Plant Name</th>
-                      <th className="p-4">Qty</th>
-                      <th className="p-4">Rate</th>
-                      <th className="p-4">Amount</th>
-                      <th className="p-4">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {billForm.lines.map((line, index) => (
-                      <tr key={index} className="border-t border-leaf-700/10">
-                        <td className="p-3">
-                          <input list="plant-options" value={line.plantName} onChange={(event) => updateBillLine(index, 'plantName', event.target.value)} placeholder="Plant name" className="w-full rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
-                        </td>
-                        <td className="p-3">
-                          <input type="number" min="1" value={line.qty} onChange={(event) => updateBillLine(index, 'qty', event.target.value)} className="w-24 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
-                        </td>
-                        <td className="p-3">
-                          <input type="number" min="0" value={line.rate} onChange={(event) => updateBillLine(index, 'rate', event.target.value)} className="w-28 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
-                        </td>
-                        <td className="p-3 font-extrabold">Rs. {(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}</td>
-                        <td className="p-3">
-                          <button type="button" onClick={() => removeBillLine(index)} className="grid h-9 w-9 place-items-center rounded-full bg-red-100 text-red-700"><Trash2 size={16} /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <datalist id="plant-options">
-                  {inventory.map((plant) => <option key={plant._id} value={plant.name} />)}
-                </datalist>
-              </div>
-
-              <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
-                <textarea value={billForm.notes} onChange={(event) => setBillForm({ ...billForm, notes: event.target.value })} placeholder="Notes or terms" rows="3" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <div className="rounded-2xl bg-leaf-50 p-5 text-right dark:bg-[#0c2411]">
-                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-leaf-900/60 dark:text-leaf-100/70">Total</p>
-                  <p className="mt-2 text-4xl font-extrabold">Rs. {billTotal.toLocaleString()}</p>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button type="button" onClick={addBillLine} className="btn-secondary"><Plus size={18} /> Add Item</button>
-                <button className="btn-primary"><FileText size={18} /> Save {billForm.type}</button>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    const draftBill = {
-                      ...billForm,
-                      number: `${billForm.type === 'Bill' ? 'BILL' : 'QT'}-DRAFT`,
-                      total: billTotal,
-                    };
-                    setPreviewBill(draftBill);
-                  }} 
-                  className="btn-secondary"
-                >
-                  <Printer size={18} /> Preview & Print
-                </button>
-              </div>
-            </form>
-
-            <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <h2 className="flex items-center gap-2 text-2xl font-extrabold"><FileText /> Bills & Quotations</h2>
-                <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{bills.length}</span>
-              </div>
-              <div className="space-y-4">
-                {bills.length === 0 && <p className="rounded-2xl bg-leaf-50 p-5 text-leaf-900/70 dark:bg-[#0c2411] dark:text-leaf-100/75">No bills or quotations saved yet.</p>}
-                {bills.map((bill) => (
-                  <article key={bill.id} className="rounded-2xl border border-leaf-700/10 bg-leaf-50 p-5 dark:bg-[#0c2411]">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{bill.type}</p>
-                        <h3 className="text-xl font-extrabold">{bill.number}</h3>
+                  {/* KPI Glassmorphism Cards Grid */}
+                  <div className="grid gap-5 grid-cols-2 md:grid-cols-3">
+                    {/* Today's Sales */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Today's Sales</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">₹{todaySalesStats.total.toLocaleString()}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 shadow-inner shrink-0">
+                          <DollarSign size={20} />
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className="font-extrabold">Rs. {bill.total.toLocaleString()}</span>
-                        <div className="flex gap-2">
-                          <button 
-                            type="button"
-                            onClick={() => setPreviewBill(bill)} 
-                            className="grid h-8 w-8 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200 dark:bg-leaf-800 dark:text-leaf-100"
-                            title="Preview & Print"
-                          >
-                            <Printer size={14} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => deleteBill(bill.id)} 
-                            className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className={`font-extrabold flex items-center gap-0.5 ${todaySalesStats.trend === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                          {todaySalesStats.trend === 'up' ? '▲' : '▼'} {Math.abs(Number(todaySalesStats.pct))}%
+                        </span>
+                        <span className="text-leaf-900/50 dark:text-leaf-100/50">vs yesterday (₹{todaySalesStats.yesterday})</span>
+                      </div>
+                    </div>
+
+                    {/* Monthly Revenue */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Monthly Revenue</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">₹{monthlyRevenueStats.total.toLocaleString()}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 shadow-inner shrink-0">
+                          <TrendingUp size={20} />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className={`font-extrabold flex items-center gap-0.5 ${monthlyRevenueStats.trend === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                          {monthlyRevenueStats.trend === 'up' ? '▲' : '▼'} {Math.abs(Number(monthlyRevenueStats.pct))}%
+                        </span>
+                        <span className="text-leaf-900/50 dark:text-leaf-100/50">vs last month (₹{monthlyRevenueStats.lastMonth})</span>
+                      </div>
+                    </div>
+
+                    {/* Plants in Inventory */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Total Plants</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">{inventory.length}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 shadow-inner shrink-0">
+                          <Leaf size={20} />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className="text-leaf-950 dark:text-white font-extrabold">{inventory.reduce((sum, p) => sum + (Number(p.stock) || 0), 0).toLocaleString()}</span>
+                        <span className="text-leaf-900/50 dark:text-leaf-100/50">total stock units in store</span>
+                      </div>
+                    </div>
+
+                    {/* Low Stock Products */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Low Stock Items</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">{lowStockCount}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 shadow-inner shrink-0">
+                          <AlertTriangle size={20} />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className={`font-extrabold ${lowStockCount > 0 ? 'text-amber-600 animate-pulse' : 'text-green-600'}`}>
+                          {lowStockCount > 0 ? 'Reorder needed' : 'All items well-stocked'}
+                        </span>
+                        <span className="text-leaf-900/50 dark:text-leaf-100/50">(Stock ≤ 10)</span>
+                      </div>
+                    </div>
+
+                    {/* Pending Reviews */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Pending Reviews</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">{pendingReviewsCount}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950 text-amber-500 dark:text-amber-300 shadow-inner shrink-0">
+                          <Star size={20} />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className={`font-extrabold ${pendingReviewsCount > 0 ? 'text-amber-500 font-bold' : 'text-green-600'}`}>
+                          {pendingReviewsCount > 0 ? 'Approvals pending' : 'Zero approvals pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Active Labour Count */}
+                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xxs font-extrabold uppercase tracking-wider text-leaf-900/55 dark:text-leaf-100/60">Active Labour</p>
+                          <h3 className="text-2xl md:text-3xl font-black mt-2 text-leaf-950 dark:text-white">{laboursCount}</h3>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-300 shadow-inner shrink-0">
+                          <Users size={20} />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
+                        <span className="text-leaf-900/50 dark:text-leaf-100/50">Wages: Daily & Monthly rosters</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Payroll Roster breakdown */}
+                  <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 text-left">
+                    <div className="mb-4 flex items-center justify-between border-b border-leaf-700/5 pb-3">
+                      <h3 className="text-lg font-bold flex items-center gap-2 text-leaf-950 dark:text-white">
+                        <DollarSign className="text-green-600 shrink-0" size={19} /> Monthly Payroll Cost (₹)
+                      </h3>
+                      <span className="text-[10px] bg-leaf-100 dark:bg-leaf-800 text-leaf-900 dark:text-leaf-100 font-extrabold px-3 py-1 rounded-full uppercase">
+                        {currentAnalyticsDate.toLocaleString('default', { month: 'short' })} {currentAnalyticsDate.getFullYear()}
+                      </span>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="bg-green-500/5 dark:bg-green-500/10 border border-green-500/10 rounded-2xl p-4 flex flex-col justify-between">
+                        <p className="text-xxs font-extrabold text-green-700 dark:text-green-400 uppercase">Total Wages Paid</p>
+                        <p className="text-2xl font-black mt-1 text-green-800 dark:text-green-300">₹{payrollStats.paid.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 rounded-2xl p-4 flex flex-col justify-between">
+                        <p className="text-xxs font-extrabold text-amber-700 dark:text-amber-400 uppercase">Total Advances Disbursed</p>
+                        <p className="text-2xl font-black mt-1 text-amber-800 dark:text-amber-300">₹{payrollStats.advances.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-red-500/5 dark:bg-red-500/10 border border-red-500/10 rounded-2xl p-4 flex flex-col justify-between">
+                        <p className="text-xxs font-extrabold text-red-700 dark:text-red-400 uppercase">Outstanding Payroll Balance</p>
+                        <p className="text-2xl font-black mt-1 text-red-800 dark:text-red-300">₹{payrollStats.outstanding.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Inventory category breakdown */}
+                  <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 text-left">
+                    <div className="mb-4 border-b border-leaf-700/5 pb-3">
+                      <h3 className="text-lg font-bold flex items-center gap-2 text-leaf-950 dark:text-white">
+                        <Package className="text-leaf-650 shrink-0" size={19} /> Plant Inventory Breakdown
+                      </h3>
+                    </div>
+                    <div className="grid gap-4 grid-cols-2 md:grid-cols-6">
+                      {Object.keys(inventoryBreakdown).map(catName => {
+                        const stat = inventoryBreakdown[catName];
+                        return (
+                          <div key={catName} className="bg-leaf-500/5 dark:bg-leaf-500/15 rounded-2xl p-3 border border-leaf-700/5 text-center flex flex-col justify-between">
+                            <p className="text-[10px] font-extrabold text-soil dark:text-leaf-300 uppercase truncate">{catName}</p>
+                            <p className="text-xl font-black mt-1.5 text-leaf-900 dark:text-white">{stat.stock.toLocaleString()}</p>
+                            <p className="text-[9px] text-leaf-900/50 dark:text-leaf-100/50 font-bold mt-1 uppercase">{stat.count} varieties</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Interactive Recharts Visualization Section */}
+                  <div className="grid gap-6 md:grid-cols-2">
+                    
+                    {/* AreaChart: Sales Volume Trend */}
+                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                      <div className="mb-4">
+                        <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Sales Volume Trend (Last 30 Days)</h4>
+                      </div>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={last30DaysSalesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#2d6f2c" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#2d6f2c" stopOpacity={0.05}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,111,44,0.08)" />
+                            <XAxis dataKey="date" tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <YAxis tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(45,111,44,0.15)', borderRadius: '12px', fontSize: 11, color: '#07130a' }} />
+                            <Area type="monotone" dataKey="sales" name="Sales Amount (₹)" stroke="#2d6f2c" strokeWidth={2} fillOpacity={1} fill="url(#colorSales)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* LineChart: Cumulative Last 30 Days Revenue */}
+                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                      <div className="mb-4">
+                        <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Cumulative Revenue Growth (30 Days)</h4>
+                      </div>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={cumulativeRevenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,111,44,0.08)" />
+                            <XAxis dataKey="date" tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <YAxis tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(45,111,44,0.15)', borderRadius: '12px', fontSize: 11, color: '#07130a' }} />
+                            <Line type="monotone" dataKey="revenue" name="Total Revenue (₹)" stroke="#06b6d4" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* BarChart: Daily Sales Graph */}
+                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                      <div className="mb-4">
+                        <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Daily Sales (Day-by-Day amount)</h4>
+                      </div>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={last30DaysSalesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,111,44,0.08)" />
+                            <XAxis dataKey="date" tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <YAxis tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(45,111,44,0.15)', borderRadius: '12px', fontSize: 11, color: '#07130a' }} />
+                            <Bar dataKey="sales" name="Sales (₹)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* BarChart: Monthly Growth Comparison */}
+                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                      <div className="mb-4">
+                        <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Monthly Sales Growth Comparison</h4>
+                      </div>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={monthlyGrowthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,111,44,0.08)" />
+                            <XAxis dataKey="monthName" tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <YAxis tick={{ fontSize: 9 }} stroke="rgba(45,111,44,0.4)" />
+                            <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(45,111,44,0.15)', borderRadius: '12px', fontSize: 11, color: '#07130a' }} />
+                            <Bar dataKey="sales" name="Monthly Sales (₹)" fill="#4ade80" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* PieChart: Category Distribution */}
+                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between md:col-span-2 text-left">
+                      <div className="mb-4">
+                        <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Plant Categories Variety Distribution</h4>
+                      </div>
+                      <div className="grid md:grid-cols-2 items-center gap-6">
+                        <div className="h-64 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={categoryPieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={4}
+                                dataKey="value"
+                              >
+                                {categoryPieData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(45,111,44,0.15)', borderRadius: '12px', fontSize: 11, color: '#07130a' }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xxs font-extrabold text-soil dark:text-leaf-300 uppercase tracking-wider mb-2 text-left">Category Legend (Unique Product Counts)</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            {categoryPieData.map((entry, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <div className="w-3.5 h-3.5 rounded shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                <span className="font-semibold text-leaf-950 dark:text-white">{entry.name}: {entry.value}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <p className="font-bold">{bill.customerName}</p>
-                    <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">{bill.customerPhone || 'No phone'} · {bill.date}</p>
-                    <div className="mt-3 space-y-1 text-sm">
-                      {bill.lines.map((line, index) => (
-                        <p key={index}>{line.plantName} · {line.qty} x Rs. {Number(line.rate).toLocaleString()}</p>
+
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Plant Inventory */}
+              {activeTab === 'plants' && (
+                <div className="grid gap-8 xl:grid-cols-[1fr_0.75fr] animate-in fade-in duration-300">
+                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 text-left border border-leaf-700/5">
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                      <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Leaf /> Plant Management</h2>
+                      <label className="flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 border border-leaf-700/10 dark:bg-[#0c2411]">
+                        <Search size={17} />
+                        <input 
+                          placeholder="Search inventory" 
+                          value={plantFilterQuery}
+                          onChange={e => setPlantFilterQuery(e.target.value)}
+                          className="bg-transparent outline-none text-sm" 
+                        />
+                      </label>
+                    </div>
+                    <div className="overflow-auto">
+                      <table className="w-full min-w-[760px] text-left">
+                        <thead className="bg-leaf-50 text-sm uppercase tracking-[0.12em] dark:bg-[#0c2411]">
+                          <tr>
+                            <th className="p-4">Plant</th>
+                            <th className="p-4">Category</th>
+                            <th className="p-4">Price</th>
+                            <th className="p-4">Stock</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredInventory.map((plant) => (
+                            <tr key={plant._id} className="border-b border-leaf-700/10">
+                              <td className="p-4">
+                                <div className="flex items-center gap-3">
+                                  <img src={plant.image} alt={plant.name} className="h-12 w-12 rounded-xl object-cover border border-leaf-700/10" />
+                                  <div>
+                                    <p className="font-bold">{plant.name}</p>
+                                    <p className="text-xs text-leaf-900/60 dark:text-leaf-100/70">{plant.description}</p>
+                                    {plant.scientificName && <span className="text-[10px] italic text-soil dark:text-leaf-300 font-bold">{plant.scientificName}</span>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4">{plant.category}</td>
+                              <td className="p-4 font-bold">₹{plant.price}</td>
+                              <td className="p-4 font-bold">{plant.stock}</td>
+                              <td className="p-4">
+                                <span className={`rounded-full px-3 py-1 text-xs font-bold ${Number(plant.stock) <= 10 ? 'bg-amber-100 text-amber-800' : 'bg-leaf-100 text-leaf-800 dark:bg-leaf-700 dark:text-white'}`}>
+                                  {Number(plant.stock) <= 0 ? 'Out of Stock' : Number(plant.stock) <= 10 ? 'Low Stock' : 'Available'}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex gap-2">
+                                  <button onClick={() => {
+                                    setForm({
+                                      name: plant.name,
+                                      scientificName: plant.scientificName || '',
+                                      price: String(plant.price),
+                                      stock: String(plant.stock),
+                                      category: plant.category,
+                                      description: plant.description || '',
+                                      imageFile: null
+                                    });
+                                    alert("Edit details loaded to the form on the right. Modify values and click Save Plant.");
+                                  }} className="grid h-9 w-9 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200"><Edit size={16} /></button>
+                                  <button onClick={() => removePlant(plant._id)} className="grid h-9 w-9 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"><Trash2 size={16} /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-6">
+                    <form onSubmit={addPlant} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                      <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Plus /> Add New Plant</h2>
+                      <div className="grid gap-3">
+                        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        <input value={form.scientificName} onChange={(e) => setForm({ ...form, scientificName: e.target.value })} placeholder="Scientific name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
+                          <option>Indoor</option><option>Outdoor</option><option>Flowering</option><option>Fruit</option><option>Medicinal</option><option>Farm</option>
+                        </select>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="Stock" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        </div>
+                        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-leaf-700/40 px-4 py-6 font-bold text-leaf-700 dark:text-leaf-300">
+                          <Image size={18} /> {form.imageFile ? "Image Selected" : "Upload plant image"}
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => setForm({...form, imageFile: e.target.files[0]})} />
+                        </label>
+                        <button className="btn-primary"><Plus size={18} /> Save Plant</button>
+                      </div>
+                    </form>
+                  </aside>
+                </div>
+              )}
+
+              {/* Tab 3: Billing System */}
+              {activeTab === 'billing' && (
+                <div className="grid gap-8 xl:grid-cols-[1fr_0.75fr] animate-in fade-in duration-300">
+                  <form onSubmit={saveBill} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                    <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                      <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><FileText /> Billing System</h2>
+                      <select value={billForm.type} onChange={(event) => setBillForm({ ...billForm, type: event.target.value })} className="rounded-full border border-leaf-700/20 bg-transparent px-4 py-2 font-bold outline-none">
+                        <option>Quotation</option>
+                        <option>Bill</option>
+                      </select>
+                    </div>
+
+                    <div className="mb-5 grid gap-3 md:grid-cols-3">
+                      <input value={billForm.customerName} onChange={(event) => setBillForm({ ...billForm, customerName: event.target.value })} placeholder="Customer name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <input value={billForm.customerPhone} onChange={(event) => setBillForm({ ...billForm, customerPhone: event.target.value })} placeholder="Customer phone" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <input type="date" value={billForm.date} onChange={(event) => setBillForm({ ...billForm, date: event.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                    </div>
+
+                    <div className="overflow-auto rounded-2xl border border-leaf-700/10">
+                      <table className="w-full min-w-[760px] text-left">
+                        <thead className="bg-leaf-50 text-sm uppercase tracking-[0.12em] dark:bg-[#0c2411]">
+                          <tr>
+                            <th className="p-4">Plant Name</th>
+                            <th className="p-4">Qty</th>
+                            <th className="p-4">Rate</th>
+                            <th className="p-4">Amount</th>
+                            <th className="p-4">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billForm.lines.map((line, index) => (
+                            <tr key={index} className="border-t border-leaf-700/10">
+                              <td className="p-3">
+                                <input list="plant-options" value={line.plantName} onChange={(event) => updateBillLine(index, 'plantName', event.target.value)} placeholder="Plant name" className="w-full rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
+                              </td>
+                              <td className="p-3">
+                                <input type="number" min="1" value={line.qty} onChange={(event) => updateBillLine(index, 'qty', event.target.value)} className="w-24 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
+                              </td>
+                              <td className="p-3">
+                                <input type="number" min="0" value={line.rate} onChange={(event) => updateBillLine(index, 'rate', event.target.value)} className="w-28 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2 outline-none" />
+                              </td>
+                              <td className="p-3 font-extrabold">Rs. {(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}</td>
+                              <td className="p-3">
+                                <button type="button" onClick={() => removeBillLine(index)} className="grid h-9 w-9 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"><Trash2 size={16} /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <datalist id="plant-options">
+                        {inventory.map((plant) => <option key={plant._id} value={plant.name} />)}
+                      </datalist>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
+                      <textarea value={billForm.notes} onChange={(event) => setBillForm({ ...billForm, notes: event.target.value })} placeholder="Notes or terms" rows="3" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <div className="rounded-2xl bg-leaf-50 p-5 text-right dark:bg-[#0c2411]">
+                        <p className="text-sm font-bold uppercase tracking-[0.16em] text-leaf-900/60 dark:text-leaf-100/70">Total</p>
+                        <p className="mt-2 text-4xl font-extrabold">Rs. {billTotal.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button type="button" onClick={addBillLine} className="btn-secondary"><Plus size={18} /> Add Item</button>
+                      <button className="btn-primary"><FileText size={18} /> Save {billForm.type}</button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const draftBill = {
+                            ...billForm,
+                            number: `${billForm.type === 'Bill' ? 'BILL' : 'QT'}-DRAFT`,
+                            total: billTotal,
+                          };
+                          setPreviewBill(draftBill);
+                        }} 
+                        className="btn-secondary"
+                      >
+                        <Printer size={18} /> Preview & Print
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                      <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><FileText /> Bills & Quotations</h2>
+                      <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{bills.length}</span>
+                    </div>
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                      {bills.length === 0 && <p className="rounded-2xl bg-leaf-50 p-5 text-leaf-900/70 dark:bg-[#0c2411] dark:text-leaf-100/75">No bills or quotations saved yet.</p>}
+                      {bills.map((bill) => (
+                        <article key={bill.id} className="rounded-2xl border border-leaf-700/10 bg-leaf-50 p-5 dark:bg-[#0c2411] hover:shadow transition">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{bill.type}</p>
+                              <h3 className="text-xl font-extrabold">{bill.number}</h3>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className="font-extrabold">Rs. {bill.total.toLocaleString()}</span>
+                              <div className="flex gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => setPreviewBill(bill)} 
+                                  className="grid h-8 w-8 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200 dark:bg-leaf-800 dark:text-leaf-100"
+                                  title="Preview & Print"
+                                >
+                                  <Printer size={14} />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => deleteBill(bill.id)} 
+                                  className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="font-bold">{bill.customerName}</p>
+                          <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70">{bill.customerPhone || 'No phone'} · {bill.date}</p>
+                          <div className="mt-3 space-y-1 text-sm border-t border-leaf-700/5 pt-2">
+                            {bill.lines.map((line, index) => (
+                              <p key={index} className="text-xs text-leaf-900/80 dark:text-leaf-100/80">{line.plantName} · {line.qty} x Rs. {Number(line.rate).toLocaleString()}</p>
+                            ))}
+                          </div>
+                        </article>
                       ))}
                     </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-8 xl:grid-cols-[0.75fr_1.25fr]">
-            <form onSubmit={addOrUpdateProject} className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-              <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold">
-                <BriefcaseBusiness /> {editingProjectId ? 'Edit Past Work' : 'Add Past Work'}
-              </h2>
-              <div className="grid gap-3">
-                <input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} placeholder="Project title" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <select value={projectForm.category} onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
-                  <option>Garden Design</option><option>Landscaping</option><option>Farm Work</option><option>Nursery</option>
-                </select>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <input value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} placeholder="Location" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                  <input value={projectForm.duration} onChange={(e) => setProjectForm({ ...projectForm, duration: e.target.value })} placeholder="Duration" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                </div>
-                {/* Plants Used Component */}
-                <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent relative">
-                  <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Plants Used</label>
-                  
-                  {/* Selected Plants Tags */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {(!projectForm.plantsUsed || projectForm.plantsUsed.length === 0) ? (
-                      <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 italic">No plants added yet. Search below or type custom name.</span>
-                    ) : (
-                      projectForm.plantsUsed.map((plantName, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1.5 rounded-full bg-leaf-100 dark:bg-leaf-800 px-3 py-1 text-xs font-bold text-leaf-900 dark:text-leaf-100">
-                          {plantName}
-                          <button 
-                            type="button" 
-                            onClick={() => handleRemovePlantTag(plantName)} 
-                            className="text-red-500 hover:text-red-700 font-extrabold focus:outline-none ml-1 text-sm"
-                          >
-                            &times;
-                          </button>
-                        </span>
-                      ))
-                    )}
                   </div>
+                </div>
+              )}
 
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <div className="flex items-center gap-2 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2">
-                        <Search size={16} className="text-leaf-900/40 dark:text-leaf-100/40" />
-                        <input 
-                          type="text" 
-                          value={plantSearchQuery} 
-                          onChange={(e) => {
-                            setPlantSearchQuery(e.target.value);
-                            setShowSuggestions(true);
-                          }}
-                          onFocus={() => setShowSuggestions(true)}
-                          onBlur={() => {
-                            setTimeout(() => setShowSuggestions(false), 200);
-                          }}
-                          placeholder="Search plant inventory..." 
-                          className="w-full bg-transparent text-sm outline-none" 
-                        />
+              {/* Tab 4: Past Work Projects */}
+              {activeTab === 'projects' && (
+                <div className="grid gap-8 xl:grid-cols-[0.75fr_1.25fr] animate-in fade-in duration-300">
+                  <form onSubmit={addOrUpdateProject} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                    <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white">
+                      <BriefcaseBusiness /> {editingProjectId ? 'Edit Past Work' : 'Add Past Work'}
+                    </h2>
+                    <div className="grid gap-3">
+                      <input value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} placeholder="Project title" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <select value={projectForm.category} onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
+                        <option>Garden Design</option><option>Landscaping</option><option>Farm Work</option><option>Nursery</option>
+                      </select>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} placeholder="Location" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        <input value={projectForm.duration} onChange={(e) => setProjectForm({ ...projectForm, duration: e.target.value })} placeholder="Duration" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
                       </div>
                       
-                      {/* Suggestions Dropdown */}
-                      {showSuggestions && plantSearchQuery.trim() && (
-                        <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-leaf-700/20 bg-white dark:bg-leaf-900 shadow-xl z-20">
-                          {inventory
-                            .filter(p => p.name.toLowerCase().includes(plantSearchQuery.toLowerCase()) && !projectForm.plantsUsed.includes(p.name))
-                            .map((plant) => (
-                              <button 
-                                type="button" 
-                                key={plant._id} 
-                                onClick={() => handleAddPlantTag(plant.name)}
-                                className="w-full text-left px-4 py-2 text-sm hover:bg-leaf-50 dark:hover:bg-leaf-800 transition-colors font-semibold"
-                              >
-                                {plant.name} <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 font-normal">({plant.category})</span>
-                              </button>
+                      {/* Plants Used Component */}
+                      <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent relative">
+                        <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Plants Used</label>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {(!projectForm.plantsUsed || projectForm.plantsUsed.length === 0) ? (
+                            <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 italic">No plants added yet. Search below or type custom name.</span>
+                          ) : (
+                            projectForm.plantsUsed.map((plantName, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1.5 rounded-full bg-leaf-100 dark:bg-leaf-800 px-3 py-1 text-xs font-bold text-leaf-900 dark:text-leaf-100">
+                                {plantName}
+                                <button type="button" onClick={() => handleRemovePlantTag(plantName)} className="text-red-500 hover:text-red-700 font-extrabold focus:outline-none ml-1 text-sm">&times;</button>
+                              </span>
                             ))
-                          }
-                          {inventory.filter(p => p.name.toLowerCase().includes(plantSearchQuery.toLowerCase()) && !projectForm.plantsUsed.includes(p.name)).length === 0 && (
-                            <div className="px-4 py-2 text-xs text-leaf-900/50 dark:text-leaf-100/50 italic">
-                              No matching plants in inventory. Click "Add Custom" to add as-typed.
-                            </div>
                           )}
                         </div>
-                      )}
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <div className="flex items-center gap-2 rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2">
+                              <Search size={16} className="text-leaf-900/40 dark:text-leaf-100/40" />
+                              <input 
+                                type="text" 
+                                value={plantSearchQuery} 
+                                onChange={(e) => {
+                                  setPlantSearchQuery(e.target.value);
+                                  setShowSuggestions(true);
+                                }}
+                                onFocus={() => setShowSuggestions(true)}
+                                onBlur={() => {
+                                  setTimeout(() => setShowSuggestions(false), 200);
+                                }}
+                                placeholder="Search plant inventory..." 
+                                className="w-full bg-transparent text-sm outline-none" 
+                              />
+                            </div>
+                            {showSuggestions && plantSearchQuery.trim() && (
+                              <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-leaf-700/20 bg-white dark:bg-leaf-900 shadow-xl z-20">
+                                {inventory
+                                  .filter(p => p.name.toLowerCase().includes(plantSearchQuery.toLowerCase()) && !projectForm.plantsUsed.includes(p.name))
+                                  .map((plant) => (
+                                    <button type="button" key={plant._id} onClick={() => handleAddPlantTag(plant.name)} className="w-full text-left px-4 py-2 text-sm hover:bg-leaf-50 dark:hover:bg-leaf-800 transition-colors font-semibold">
+                                      {plant.name} <span className="text-xs text-leaf-900/50 dark:text-leaf-100/50 font-normal">({plant.category})</span>
+                                    </button>
+                                  ))
+                                }
+                              </div>
+                            )}
+                          </div>
+                          <button type="button" onClick={() => handleAddPlantTag(plantSearchQuery)} className="btn-secondary py-2 px-4 text-xs font-bold shrink-0">Add Custom</button>
+                        </div>
+                      </div>
+
+                      {/* Additional Photos Section */}
+                      <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent">
+                        <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Additional Project Photos</label>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {(projectForm.additionalImages || []).map((url, idx) => (
+                            <div key={`url-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
+                              <img src={url} alt="project extra" className="h-full w-full object-cover" />
+                              <button type="button" onClick={() => removeAdditionalImage('url', idx)} className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"><Trash2 size={16} /></button>
+                            </div>
+                          ))}
+                          {(projectForm.additionalImageFiles || []).map((file, idx) => {
+                            const localUrl = URL.createObjectURL(file);
+                            return (
+                              <div key={`file-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
+                                <img src={localUrl} alt="project extra local" className="h-full w-full object-cover" />
+                                <button type="button" onClick={() => removeAdditionalImage('file', idx)} className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"><Trash2 size={16} /></button>
+                              </div>
+                            );
+                          })}
+                          <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-leaf-700/30 hover:border-leaf-700/60 cursor-pointer bg-leaf-50/50 dark:bg-leaf-900/20 text-leaf-700 dark:text-leaf-300">
+                            <Plus size={20} />
+                            <span className="text-[10px] mt-1 text-center font-bold">Add Photo</span>
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleAdditionalPhotosUpload(e.target.files)} />
+                          </label>
+                        </div>
+                      </div>
+
+                      <textarea value={projectForm.scope} onChange={(e) => setProjectForm({ ...projectForm, scope: e.target.value })} placeholder="Work details and scope" rows="4" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <textarea value={projectForm.result} onChange={(e) => setProjectForm({ ...projectForm, result: e.target.value })} placeholder="Project result shown on website" rows="3" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <UploadBox label="Before image" preview={projectForm.before} onChange={(file) => handleProjectImage('before', file)} />
+                        <UploadBox label="After / main image" preview={projectForm.after} onChange={(file) => handleProjectImage('after', file)} />
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <button disabled={isSavingProject} className="btn-primary">
+                          {isSavingProject ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                              {editingProjectId ? 'Updating...' : 'Saving...'}
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={18} /> {editingProjectId ? 'Update Work' : 'Save Work'}
+                            </>
+                          )}
+                        </button>
+                        {editingProjectId && (
+                          <button type="button" onClick={() => { setEditingProjectId(null); setProjectForm(emptyProjectForm); }} className="btn-secondary">
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <button 
-                      type="button" 
-                      onClick={() => handleAddPlantTag(plantSearchQuery)}
-                      className="btn-secondary py-2 px-4 text-xs font-bold shrink-0"
-                    >
-                      Add Custom
-                    </button>
+                  </form>
+
+                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                      <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><BriefcaseBusiness /> Past Work Management</h2>
+                      <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{managedProjects.length} works</span>
+                    </div>
+                    <div className="grid gap-5 lg:grid-cols-2 max-h-[75vh] overflow-y-auto pr-1">
+                      {managedProjects.map((project) => (
+                        <article key={project.id} className="overflow-hidden rounded-2xl border border-leaf-700/10 bg-leaf-50 dark:bg-[#0c2411] hover:shadow transition">
+                          <img src={project.after} alt={project.title} className="h-52 w-full object-cover" />
+                          <div className="p-5">
+                            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{project.category}</p>
+                            <h3 className="mt-2 text-xl font-extrabold">{project.title}</h3>
+                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-leaf-900/70 dark:text-leaf-100/75">{project.scope}</p>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <button onClick={() => editProject(project)} className="rounded-full bg-leaf-700 px-4 py-2 text-sm font-bold text-white hover:brightness-110"><Edit size={15} className="inline" /> Edit</button>
+                              <button onClick={() => removeProject(project.id)} className="rounded-full bg-red-100 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-200"><Trash2 size={15} className="inline" /> Delete</button>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* Additional Photos Section */}
-                <div className="rounded-xl border border-leaf-700/20 p-4 bg-transparent">
-                  <label className="block text-sm font-bold text-leaf-900 dark:text-leaf-100 mb-2">Additional Project Photos</label>
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    {/* Display existing URLs */}
-                    {(projectForm.additionalImages || []).map((url, idx) => (
-                      <div key={`url-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
-                        <img src={url} alt="project extra" className="h-full w-full object-cover" />
-                        <button 
-                          type="button" 
-                          onClick={() => removeAdditionalImage('url', idx)}
-                          className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+              {/* Tab 5: Labour ERP */}
+              {activeTab === 'labour' && (
+                <div className="print-labour-wrapper animate-in fade-in duration-300">
+                  <LabourRegister />
+                </div>
+              )}
+
+              {/* Tab 6: Review Approvals */}
+              {activeTab === 'reviews' && (
+                <div className="max-w-4xl mx-auto rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left animate-in fade-in duration-300">
+                  <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Star /> Review Approvals</h2>
+                  <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                    {adminReviews.length === 0 && <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70 p-5 text-center">No reviews found in the database.</p>}
+                    {adminReviews.map((review) => (
+                      <div key={review.id} className="mb-3 rounded-2xl bg-leaf-50 p-5 dark:bg-[#0c2411] border border-leaf-700/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow transition">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <p className="font-bold text-lg">{review.name}</p>
+                            {review.approved ? (
+                              <span className="text-xs font-bold bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 px-2.5 py-0.5 rounded-full border border-green-200 dark:border-green-800">Approved</span>
+                            ) : (
+                              <span className="text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">Pending Approval</span>
+                            )}
+                          </div>
+                          <p className="text-sm leading-relaxed text-leaf-900/80 dark:text-leaf-100/85">{review.text}</p>
+                          <div className="flex text-yellow-400 mt-2">
+                            {Array.from({ length: Number(review.rating || 5) }).map((_, i) => (
+                              <Star key={i} size={14} className="fill-current" />
+                            ))}
+                          </div>
+                        </div>
+                        {review.plantPhoto && (
+                          <img src={review.plantPhoto} alt="Review plant" className="h-16 w-16 rounded-xl object-cover border border-leaf-700/10" />
+                        )}
+                        <div className="flex gap-2 shrink-0">
+                          {!review.approved && (
+                            <button onClick={() => approveReview(review.id)} type="button" className="rounded-full bg-leaf-700 hover:brightness-110 px-4 py-2 text-xs font-bold text-white"><Check size={14} className="inline mr-1" /> Approve</button>
+                          )}
+                          <button onClick={() => deleteReview(review.id)} type="button" className="rounded-full bg-red-100 hover:bg-red-200 px-4 py-2 text-xs font-bold text-red-700">Delete</button>
+                        </div>
                       </div>
                     ))}
-                    {/* Display local file previews */}
-                    {(projectForm.additionalImageFiles || []).map((file, idx) => {
-                      const localUrl = URL.createObjectURL(file);
-                      return (
-                        <div key={`file-${idx}`} className="relative group aspect-square rounded-lg overflow-hidden border border-leaf-700/10">
-                          <img src={localUrl} alt="project extra local" className="h-full w-full object-cover" />
-                          <button 
-                            type="button" 
-                            onClick={() => removeAdditionalImage('file', idx)}
-                            className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {/* Upload Trigger */}
-                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-leaf-700/30 hover:border-leaf-700/60 cursor-pointer bg-leaf-50/50 dark:bg-leaf-900/20 text-leaf-700 dark:text-leaf-300">
-                      <Plus size={20} />
-                      <span className="text-[10px] mt-1 text-center font-bold">Add Photo</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        multiple 
-                        className="hidden" 
-                        onChange={(e) => handleAdditionalPhotosUpload(e.target.files)} 
-                      />
-                    </label>
                   </div>
                 </div>
-                <textarea value={projectForm.scope} onChange={(e) => setProjectForm({ ...projectForm, scope: e.target.value })} placeholder="Work details and scope" rows="4" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <textarea value={projectForm.result} onChange={(e) => setProjectForm({ ...projectForm, result: e.target.value })} placeholder="Project result shown on website" rows="3" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <UploadBox label="Before image" preview={projectForm.before} onChange={(file) => handleProjectImage('before', file)} />
-                  <UploadBox label="After / main image" preview={projectForm.after} onChange={(file) => handleProjectImage('after', file)} />
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button disabled={isSavingProject} className="btn-primary">
-                    {isSavingProject ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                        {editingProjectId ? 'Updating...' : 'Saving...'}
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={18} /> {editingProjectId ? 'Update Work' : 'Save Work'}
-                      </>
-                    )}
-                  </button>
-                  {editingProjectId && (
-                    <button type="button" onClick={() => { setEditingProjectId(null); setProjectForm(emptyProjectForm); }} className="btn-secondary">
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </div>
-            </form>
+              )}
 
-            <div className="rounded-[2rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <h2 className="flex items-center gap-2 text-2xl font-extrabold"><BriefcaseBusiness /> Past Work Management</h2>
-                <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{managedProjects.length} works</span>
-              </div>
-              <div className="grid gap-5 lg:grid-cols-2">
-                {managedProjects.map((project) => (
-                  <article key={project.id} className="overflow-hidden rounded-2xl border border-leaf-700/10 bg-leaf-50 dark:bg-[#0c2411]">
-                    <img src={project.after} alt={project.title} className="h-52 w-full object-cover" />
-                    <div className="p-5">
-                      <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-soil dark:text-leaf-300">{project.category}</p>
-                      <h3 className="mt-2 text-xl font-extrabold">{project.title}</h3>
-                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-leaf-900/70 dark:text-leaf-100/75">{project.scope}</p>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button onClick={() => editProject(project)} className="rounded-full bg-leaf-700 px-4 py-2 text-sm font-bold text-white"><Edit size={15} className="inline" /> Edit</button>
-                        <button onClick={() => removeProject(project.id)} className="rounded-full bg-red-100 px-4 py-2 text-sm font-bold text-red-700"><Trash2 size={15} className="inline" /> Delete</button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
             </div>
           </div>
-
-          <div className="mt-8 mb-8 print-labour-wrapper">
-            <LabourRegister />
-          </div>
-
         </div>
       </section>
 
@@ -1067,6 +1660,24 @@ export default function AdminDashboard() {
       )}
 
     </main>
+  );
+}
+
+function TabButton({ id, icon: Icon, label, activeTab, onClick }) {
+  const isActive = activeTab === id;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(id)}
+      className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 ${
+        isActive 
+          ? 'bg-leaf-700 text-white shadow-md' 
+          : 'text-leaf-900/70 hover:text-leaf-900 hover:bg-leaf-50 dark:text-leaf-300 dark:hover:text-white dark:hover:bg-leaf-800'
+      }`}
+    >
+      <Icon size={18} className="shrink-0" />
+      <span>{label}</span>
+    </button>
   );
 }
 
