@@ -1,7 +1,7 @@
 import { 
   BarChart3, Bell, BriefcaseBusiness, Check, Edit, FileText, Image, Leaf, 
   LogOut, Package, Plus, Printer, Search, ShoppingBag, Star, Trash2, Users,
-  Coins, DollarSign, TrendingUp, Calendar, AlertTriangle, MessageSquare, MessageCircle
+  Coins, DollarSign, TrendingUp, Calendar, AlertTriangle
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
@@ -74,23 +74,6 @@ export default function AdminDashboard() {
   const [advances, setAdvances] = useState({});
   const [currentAnalyticsDate, setCurrentAnalyticsDate] = useState(new Date());
   const [refetchIndex, setRefetchIndex] = useState(0);
-
-  // Leads CRM States
-  const [leads, setLeads] = useState([]);
-  const [leadSearchQuery, setLeadSearchQuery] = useState('');
-  const [leadStatusFilter, setLeadStatusFilter] = useState('All');
-  const [editingLeadId, setEditingLeadId] = useState(null);
-  const [isSavingLead, setIsSavingLead] = useState(false);
-  const emptyLeadForm = {
-    customerName: '',
-    mobileNumber: '',
-    inquiryType: 'Plant Purchase',
-    source: 'Website',
-    notes: '',
-    followUpDate: '',
-    status: 'New Lead'
-  };
-  const [leadForm, setLeadForm] = useState(emptyLeadForm);
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
@@ -173,12 +156,6 @@ export default function AdminDashboard() {
         setLabours(laboursData);
         setLaboursCount(laboursData.length);
 
-        try {
-          const leadsSnap = await getDocs(collection(db, 'leads'));
-          if (!leadsSnap.empty) setLeads(leadsSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
-          else setLeads([]);
-        } catch (e) { console.error("Error fetching leads:", e); }
-
         const year = currentAnalyticsDate.getFullYear();
         const month = currentAnalyticsDate.getMonth();
         const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -223,51 +200,6 @@ export default function AdminDashboard() {
     }
     loadData();
   }, [currentAnalyticsDate, refetchIndex]);
-
-  const leadStats = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const thisMonthStr = new Date().toISOString().slice(0, 7);
-
-    const newToday = leads.filter(l => {
-      if (!l.createdAt) return false;
-      return l.createdAt.startsWith(todayStr);
-    }).length;
-
-    const thisMonth = leads.filter(l => {
-      if (!l.createdAt) return false;
-      return l.createdAt.startsWith(thisMonthStr);
-    }).length;
-
-    const total = leads.length;
-    const converted = leads.filter(l => l.status === 'Converted').length;
-    const conversionRate = total > 0 ? ((converted / total) * 100).toFixed(1) : '0.0';
-
-    return {
-      newToday,
-      thisMonth,
-      conversionRate,
-      total,
-      converted
-    };
-  }, [leads]);
-
-  const followUpReminders = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return leads.filter(l => {
-      if (!l.followUpDate || l.status === 'Converted' || l.status === 'Closed') return false;
-      return l.followUpDate <= todayStr;
-    });
-  }, [leads]);
-
-  const filteredLeads = useMemo(() => {
-    return leads.filter(l => {
-      const matchSearch = l.customerName.toLowerCase().includes(leadSearchQuery.toLowerCase()) || 
-                          l.mobileNumber.includes(leadSearchQuery) ||
-                          (l.notes || '').toLowerCase().includes(leadSearchQuery.toLowerCase());
-      const matchStatus = leadStatusFilter === 'All' || l.status === leadStatusFilter;
-      return matchSearch && matchStatus;
-    });
-  }, [leads, leadSearchQuery, leadStatusFilter]);
 
   const todaySalesStats = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -473,96 +405,6 @@ export default function AdminDashboard() {
       plant.category.toLowerCase().includes(plantFilterQuery.toLowerCase())
     );
   }, [inventory, plantFilterQuery]);
-
-  const addOrUpdateLead = async (event) => {
-    event.preventDefault();
-    if (!leadForm.customerName.trim() || !leadForm.mobileNumber.trim()) {
-      alert("Please enter customer name and mobile number.");
-      return;
-    }
-    
-    setIsSavingLead(true);
-    const leadData = {
-      customerName: leadForm.customerName.trim(),
-      mobileNumber: leadForm.mobileNumber.trim(),
-      inquiryType: leadForm.inquiryType,
-      source: leadForm.source,
-      notes: leadForm.notes.trim(),
-      followUpDate: leadForm.followUpDate,
-      status: leadForm.status,
-      createdAt: editingLeadId ? (leads.find(l => l.id === editingLeadId)?.createdAt || new Date().toISOString()) : new Date().toISOString()
-    };
-
-    try {
-      if (editingLeadId) {
-        await updateDoc(doc(db, 'leads', editingLeadId), leadData);
-        setLeads(current => current.map(l => l.id === editingLeadId ? { id: editingLeadId, ...leadData } : l));
-        alert("Lead updated successfully!");
-      } else {
-        const docRef = await addDoc(collection(db, 'leads'), leadData);
-        setLeads(current => [{ id: docRef.id, ...leadData }, ...current]);
-        alert("Lead added successfully!");
-      }
-      setEditingLeadId(null);
-      setLeadForm(emptyLeadForm);
-    } catch (error) {
-      console.error("Error saving lead:", error);
-      alert("Error saving lead: " + error.message);
-    } finally {
-      setIsSavingLead(false);
-    }
-  };
-
-  const editLead = (lead) => {
-    setEditingLeadId(lead.id);
-    setLeadForm({
-      customerName: lead.customerName,
-      mobileNumber: lead.mobileNumber,
-      inquiryType: lead.inquiryType || 'Plant Purchase',
-      source: lead.source || 'Website',
-      notes: lead.notes || '',
-      followUpDate: lead.followUpDate || '',
-      status: lead.status || 'New Lead'
-    });
-  };
-
-  const deleteLead = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this lead?")) return;
-    try {
-      await deleteDoc(doc(db, 'leads', id));
-      setLeads(current => current.filter(l => l.id !== id));
-      if (editingLeadId === id) {
-        setEditingLeadId(null);
-        setLeadForm(emptyLeadForm);
-      }
-    } catch (error) {
-      console.error("Error deleting lead:", error);
-    }
-  };
-
-  const updateLeadStatus = async (id, newStatus) => {
-    try {
-      await updateDoc(doc(db, 'leads', id), { status: newStatus });
-      setLeads(current => current.map(l => l.id === id ? { ...l, status: newStatus } : l));
-    } catch (error) {
-      console.error("Error updating lead status:", error);
-    }
-  };
-
-  const launchWhatsApp = (number, name, status) => {
-    const cleaned = number.replace(/\D/g, '');
-    const phone = cleaned.length === 10 ? `91${cleaned}` : cleaned;
-    
-    let msg = `Hello ${name}, this is Kaveri Nursery. We are reaching out regarding your nursery inquiry. How can we help you today?`;
-    if (status === 'Quotation Sent') {
-      msg = `Hello ${name}, we have sent the nursery quotation as discussed. Let us know if you need any adjustments.`;
-    } else if (status === 'Contacted') {
-      msg = `Hello ${name}, thank you for speaking with us. We are preparing the details for your request.`;
-    }
-    
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-  };
 
   const approveReview = async (id) => {
     try {
@@ -862,7 +704,6 @@ export default function AdminDashboard() {
                 <TabButton id="projects" icon={BriefcaseBusiness} label="Past Work Projects" activeTab={activeTab} onClick={handleTabChange} />
                 <TabButton id="labour" icon={Users} label="Labour ERP" activeTab={activeTab} onClick={handleTabChange} />
                 <TabButton id="reviews" icon={Star} label="Review Approvals" activeTab={activeTab} onClick={handleTabChange} />
-                <TabButton id="leads" icon={MessageSquare} label="WhatsApp CRM" activeTab={activeTab} onClick={handleTabChange} />
               </div>
             </div>
 
@@ -1009,30 +850,6 @@ export default function AdminDashboard() {
                       </div>
                       <div className="mt-4 flex items-center gap-1.5 text-[10px] leading-none">
                         <span className="text-leaf-900/50 dark:text-leaf-100/50">Wages: Daily & Monthly rosters</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CRM Leads Stats breakdown */}
-                  <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 text-left">
-                    <div className="mb-4 flex items-center justify-between border-b border-leaf-700/5 pb-3">
-                      <h3 className="text-lg font-bold flex items-center gap-2 text-leaf-950 dark:text-white">
-                        <MessageSquare className="text-leaf-650 shrink-0" size={19} /> Leads CRM Overview
-                      </h3>
-                      <button onClick={() => handleTabChange('leads')} className="text-xs font-bold text-leaf-700 dark:text-leaf-300 hover:underline">Manage CRM →</button>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div className="bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/10 rounded-2xl p-4 flex flex-col justify-between">
-                        <p className="text-xxs font-extrabold text-blue-700 dark:text-blue-400 uppercase">New Leads Today</p>
-                        <p className="text-2xl font-black mt-1 text-blue-800 dark:text-blue-300">{leadStats.newToday}</p>
-                      </div>
-                      <div className="bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/10 rounded-2xl p-4 flex flex-col justify-between">
-                        <p className="text-xxs font-extrabold text-indigo-700 dark:text-indigo-400 uppercase">Leads This Month</p>
-                        <p className="text-2xl font-black mt-1 text-indigo-800 dark:text-indigo-300">{leadStats.thisMonth}</p>
-                      </div>
-                      <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 rounded-2xl p-4 flex flex-col justify-between">
-                        <p className="text-xxs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase">Lead Conversion Rate</p>
-                        <p className="text-2xl font-black mt-1 text-emerald-800 dark:text-emerald-300">{leadStats.conversionRate}%</p>
                       </div>
                     </div>
                   </div>
@@ -1629,289 +1446,6 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 7: WhatsApp CRM */}
-              {activeTab === 'leads' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  
-                  {/* Top Stats Cards */}
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="glass rounded-2xl p-5 text-left flex justify-between items-center">
-                      <div>
-                        <p className="text-xxs font-extrabold uppercase text-leaf-900/60 dark:text-leaf-100/60">New Leads Today</p>
-                        <h4 className="text-2xl font-black text-leaf-950 dark:text-white mt-1">{leadStats.newToday}</h4>
-                      </div>
-                      <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-300"><MessageSquare size={18} /></div>
-                    </div>
-                    <div className="glass rounded-2xl p-5 text-left flex justify-between items-center">
-                      <div>
-                        <p className="text-xxs font-extrabold uppercase text-leaf-900/60 dark:text-leaf-100/60">Leads This Month</p>
-                        <h4 className="text-2xl font-black text-leaf-950 dark:text-white mt-1">{leadStats.thisMonth}</h4>
-                      </div>
-                      <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300"><Calendar size={18} /></div>
-                    </div>
-                    <div className="glass rounded-2xl p-5 text-left flex justify-between items-center">
-                      <div>
-                        <p className="text-xxs font-extrabold uppercase text-leaf-900/60 dark:text-leaf-100/60">Conversion Rate</p>
-                        <h4 className="text-2xl font-black text-leaf-950 dark:text-white mt-1">{leadStats.conversionRate}%</h4>
-                      </div>
-                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-300"><TrendingUp size={18} /></div>
-                    </div>
-                  </div>
-
-                  {/* CRM Work Area */}
-                  <div className="grid gap-8 2xl:grid-cols-[0.75fr_1.25fr]">
-                    
-                    {/* Add/Edit Lead Form */}
-                    <form onSubmit={addOrUpdateLead} className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left h-fit">
-                      <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white">
-                        <MessageSquare /> {editingLeadId ? 'Edit Lead' : 'Add New Lead'}
-                      </h2>
-                      <div className="grid gap-3">
-                        <input 
-                          value={leadForm.customerName} 
-                          onChange={(e) => setLeadForm({ ...leadForm, customerName: e.target.value })} 
-                          placeholder="Customer Name" 
-                          className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" 
-                          required
-                        />
-                        <input 
-                          value={leadForm.mobileNumber} 
-                          onChange={(e) => setLeadForm({ ...leadForm, mobileNumber: e.target.value })} 
-                          placeholder="Mobile / WhatsApp Number" 
-                          className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" 
-                          required
-                        />
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-extrabold uppercase text-soil dark:text-leaf-300 px-1">Inquiry Type</label>
-                            <select 
-                              value={leadForm.inquiryType} 
-                              onChange={(e) => setLeadForm({ ...leadForm, inquiryType: e.target.value })} 
-                              className="rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2.5 outline-none dark:bg-leaf-900"
-                            >
-                              <option>Plant Purchase</option>
-                              <option>Landscaping</option>
-                              <option>Garden Design</option>
-                              <option>Nursery Maintenance</option>
-                              <option>Other</option>
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-extrabold uppercase text-soil dark:text-leaf-300 px-1">Source</label>
-                            <select 
-                              value={leadForm.source} 
-                              onChange={(e) => setLeadForm({ ...leadForm, source: e.target.value })} 
-                              className="rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2.5 outline-none dark:bg-leaf-900"
-                            >
-                              <option>Website</option>
-                              <option>Google Maps</option>
-                              <option>Referral</option>
-                              <option>Walk-in</option>
-                              <option>Social Media</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-extrabold uppercase text-soil dark:text-leaf-300 px-1">Follow-Up Date</label>
-                          <input 
-                            type="date" 
-                            value={leadForm.followUpDate} 
-                            onChange={(e) => setLeadForm({ ...leadForm, followUpDate: e.target.value })} 
-                            className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-2.5 outline-none" 
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-extrabold uppercase text-soil dark:text-leaf-300 px-1">Status</label>
-                          <select 
-                            value={leadForm.status} 
-                            onChange={(e) => setLeadForm({ ...leadForm, status: e.target.value })} 
-                            className="rounded-xl border border-leaf-700/20 bg-transparent px-3 py-2.5 outline-none dark:bg-leaf-900"
-                          >
-                            <option>New Lead</option>
-                            <option>Contacted</option>
-                            <option>Quotation Sent</option>
-                            <option>Converted</option>
-                            <option>Closed</option>
-                          </select>
-                        </div>
-
-                        <textarea 
-                          value={leadForm.notes} 
-                          onChange={(e) => setLeadForm({ ...leadForm, notes: e.target.value })} 
-                          placeholder="Notes or requirements..." 
-                          rows="3" 
-                          className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" 
-                        />
-
-                        <div className="flex gap-2">
-                          <button disabled={isSavingLead} className="btn-primary flex-1">
-                            {isSavingLead ? 'Saving...' : editingLeadId ? 'Update Lead' : 'Add Lead'}
-                          </button>
-                          {editingLeadId && (
-                            <button 
-                              type="button" 
-                              onClick={() => { setEditingLeadId(null); setLeadForm(emptyLeadForm); }} 
-                              className="btn-secondary"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </form>
-
-                    {/* Leads List and Search */}
-                    <div className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left flex flex-col">
-                      
-                      {/* Search and Filters */}
-                      <div className="mb-5 flex flex-col md:flex-row gap-3 justify-between items-stretch md:items-center">
-                        <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white">
-                          <Users /> Active Leads
-                        </h2>
-                        
-                        <div className="flex flex-wrap gap-2">
-                          <label className="flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 border border-leaf-700/10 dark:bg-[#0c2411]">
-                            <Search size={16} />
-                            <input 
-                              placeholder="Search name/phone" 
-                              value={leadSearchQuery}
-                              onChange={e => setLeadSearchQuery(e.target.value)}
-                              className="bg-transparent outline-none text-sm w-36 sm:w-48" 
-                            />
-                          </label>
-                          <select 
-                            value={leadStatusFilter} 
-                            onChange={e => setLeadStatusFilter(e.target.value)}
-                            className="rounded-full border border-leaf-700/20 bg-transparent px-4 py-2 font-bold outline-none text-sm dark:bg-leaf-800"
-                          >
-                            <option value="All">All Statuses</option>
-                            <option>New Lead</option>
-                            <option>Contacted</option>
-                            <option>Quotation Sent</option>
-                            <option>Converted</option>
-                            <option>Closed</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Overdue / Today's Follow-Up Warning Alerts */}
-                      {followUpReminders.length > 0 && (
-                        <div className="mb-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
-                          <h4 className="text-amber-800 dark:text-amber-400 font-extrabold text-sm flex items-center gap-2 mb-2">
-                            <AlertTriangle size={16} /> {followUpReminders.length} Follow-up reminders scheduled for today or overdue!
-                          </h4>
-                          <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
-                            {followUpReminders.map(l => (
-                              <div key={l.id} className="flex justify-between items-center bg-white/50 dark:bg-black/20 rounded-lg p-2 text-xs border border-amber-500/5">
-                                <span className="font-bold">{l.customerName} ({l.mobileNumber})</span>
-                                <span className="text-amber-700 dark:text-amber-300 font-extrabold bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-full">{formatDate(l.followUpDate)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Leads Data Table */}
-                      <div className="overflow-auto rounded-2xl border border-leaf-700/10">
-                        <table className="w-full min-w-[760px] text-left">
-                          <thead className="bg-leaf-50 text-xs uppercase tracking-[0.12em] dark:bg-[#0c2411] font-extrabold">
-                            <tr>
-                              <th className="p-4">Customer Details</th>
-                              <th className="p-4">Inquiry / Source</th>
-                              <th className="p-4">Follow-Up Date</th>
-                              <th className="p-4">Status</th>
-                              <th className="p-4">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredLeads.length === 0 ? (
-                              <tr>
-                                <td colSpan="5" className="p-8 text-center text-leaf-900/60 dark:text-leaf-100/70 font-semibold">
-                                  No leads found matching your search.
-                                </td>
-                              </tr>
-                            ) : (
-                              filteredLeads.map((lead) => {
-                                const isOverdue = lead.followUpDate && 
-                                                  lead.status !== 'Converted' && 
-                                                  lead.status !== 'Closed' && 
-                                                  lead.followUpDate <= new Date().toISOString().slice(0, 10);
-                                return (
-                                  <tr key={lead.id} className="border-t border-leaf-700/10 hover:bg-leaf-50/20">
-                                    <td className="p-4">
-                                      <div>
-                                        <p className="font-bold text-sm">{lead.customerName}</p>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                          <span className="text-xs text-leaf-900/60 dark:text-leaf-100/70 font-medium">{lead.mobileNumber}</span>
-                                          <button 
-                                            type="button" 
-                                            onClick={() => launchWhatsApp(lead.mobileNumber, lead.customerName, lead.status)} 
-                                            className="text-green-600 hover:text-green-700 font-extrabold focus:outline-none"
-                                            title="Launch WhatsApp Chat"
-                                          >
-                                            <MessageCircle size={14} className="fill-green-600/10 inline" />
-                                          </button>
-                                        </div>
-                                        {lead.notes && <p className="text-xxs italic text-soil dark:text-leaf-300 mt-1 max-w-[200px] truncate" title={lead.notes}>{lead.notes}</p>}
-                                      </div>
-                                    </td>
-                                    <td className="p-4 text-xs font-semibold">
-                                      <div className="flex flex-col gap-1 align-start">
-                                        <span className="px-2 py-0.5 rounded-full bg-leaf-100 dark:bg-leaf-800 text-leaf-800 dark:text-leaf-100 w-fit">{lead.inquiryType}</span>
-                                        <span className="text-[10px] text-leaf-900/50 dark:text-leaf-100/50 font-bold uppercase ml-1">via {lead.source}</span>
-                                      </div>
-                                    </td>
-                                    <td className="p-4 text-xs">
-                                      {lead.followUpDate ? (
-                                        <span className={`font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-leaf-950 dark:text-white'}`}>
-                                          {isOverdue && <AlertTriangle size={12} />}
-                                          {formatDate(lead.followUpDate)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-leaf-900/40 dark:text-leaf-100/40 italic">Not set</span>
-                                      )}
-                                    </td>
-                                    <td className="p-4 text-xs">
-                                      <select 
-                                        value={lead.status}
-                                        onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
-                                        className={`font-extrabold rounded-full px-2.5 py-1 select-custom outline-none border border-transparent text-center focus:border-leaf-700/20 ${
-                                          lead.status === 'Converted' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' :
-                                          lead.status === 'Closed' ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300' :
-                                          lead.status === 'Quotation Sent' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' :
-                                          lead.status === 'Contacted' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                                          'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                        }`}
-                                      >
-                                        <option>New Lead</option>
-                                        <option>Contacted</option>
-                                        <option>Quotation Sent</option>
-                                        <option>Converted</option>
-                                        <option>Closed</option>
-                                      </select>
-                                    </td>
-                                    <td className="p-4">
-                                      <div className="flex gap-2">
-                                        <button onClick={() => editLead(lead)} className="grid h-8 w-8 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200" title="Edit"><Edit size={14} /></button>
-                                        <button onClick={() => deleteLead(lead.id)} className="grid h-8 w-8 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200" title="Delete"><Trash2 size={14} /></button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-
-                    </div>
                   </div>
                 </div>
               )}
