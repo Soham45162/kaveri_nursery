@@ -272,56 +272,58 @@ export default function LabourRegister() {
     if (!newAttendance[labourId]) newAttendance[labourId] = {};
 
     if (currentStatus === 'Custom') {
-      const edit = window.confirm(`Click OK to EDIT the custom wage (currently ₹${attendance[labourId][`${day}_amount`] || 0}) for ${labour?.name || 'worker'} on day ${day}.\nClick Cancel to CHANGE status to Absent.`);
-      if (edit) {
-        const defaultRate = attendance[labourId][`${day}_amount`] || labour?.salaryRate || '';
-        const amountStr = prompt(`Enter new custom wage amount (₹):`, defaultRate);
-        if (amountStr !== null) {
-          const amount = Number(amountStr);
-          if (!isNaN(amount) && amount >= 0) {
-            newAttendance[labourId][`${day}_amount`] = amount;
-            setAttendance(newAttendance);
-            try {
-              const docRef = doc(db, 'attendance', monthKey);
-              await setDoc(docRef, newAttendance, { merge: true });
-            } catch (err) {
-              console.error("Error updating custom wage amount in database:", err);
-            }
-          } else {
-            alert("Please enter a valid wage amount.");
-          }
+      const defaultRate = attendance[labourId][`${day}_amount`] || labour?.salaryRate || '';
+      const amountStr = prompt(`Enter new custom wage amount for ${labour?.name || 'worker'} on day ${day} (leave empty or click Cancel to clear attendance):`, defaultRate);
+      if (amountStr === null || amountStr.trim() === '') {
+        nextStatus = null; // Clear attendance
+      } else {
+        const amount = Number(amountStr);
+        if (isNaN(amount) || amount < 0) {
+          alert("Please enter a valid wage amount.");
+          return;
+        }
+        newAttendance[labourId][`${day}_amount`] = amount;
+        setAttendance(newAttendance);
+        try {
+          const docRef = doc(db, 'attendance', monthKey);
+          await setDoc(docRef, newAttendance, { merge: true });
+        } catch (err) {
+          console.error("Error updating custom wage amount in database:", err);
         }
         return;
-      } else {
-        nextStatus = 'Absent';
       }
     } else {
       if (!currentStatus) nextStatus = 'Full';
       else if (currentStatus === 'Full') nextStatus = 'Half';
-      else if (currentStatus === 'Half') nextStatus = 'Custom';
-      else if (currentStatus === 'Absent') nextStatus = null;
+      else if (currentStatus === 'Half') nextStatus = 'Absent';
+      else if (currentStatus === 'Absent') nextStatus = 'Custom';
     }
 
     if (nextStatus === 'Custom') {
       const defaultRate = labour?.salaryRate || '';
       const amountStr = prompt(`Enter custom salary amount for ${labour?.name || 'worker'} on day ${day} (default daily rate is ₹${defaultRate}):`, defaultRate);
-      if (amountStr === null) {
-        // User cancelled, remain on Half status
-        return;
+      if (amountStr === null || amountStr.trim() === '') {
+        // User cancelled or left empty, clear status to Empty/null instead of getting stuck
+        nextStatus = null;
+      } else {
+        const amount = Number(amountStr);
+        if (isNaN(amount) || amount < 0) {
+          alert("Please enter a valid salary amount.");
+          return;
+        }
+        newAttendance[labourId][day] = 'Custom';
+        newAttendance[labourId][`${day}_amount`] = amount;
       }
-      const amount = Number(amountStr);
-      if (isNaN(amount) || amount < 0) {
-        alert("Please enter a valid salary amount.");
-        return;
+    }
+
+    if (nextStatus !== 'Custom') {
+      if (nextStatus) {
+        newAttendance[labourId][day] = nextStatus;
+        delete newAttendance[labourId][`${day}_amount`];
+      } else {
+        delete newAttendance[labourId][day];
+        delete newAttendance[labourId][`${day}_amount`];
       }
-      newAttendance[labourId][day] = 'Custom';
-      newAttendance[labourId][`${day}_amount`] = amount;
-    } else if (nextStatus) {
-      newAttendance[labourId][day] = nextStatus;
-      delete newAttendance[labourId][`${day}_amount`];
-    } else {
-      delete newAttendance[labourId][day];
-      delete newAttendance[labourId][`${day}_amount`];
     }
     
     setAttendance(newAttendance);
