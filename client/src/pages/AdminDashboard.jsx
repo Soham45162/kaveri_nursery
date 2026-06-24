@@ -684,20 +684,20 @@ export default function AdminDashboard() {
     <main className="pt-24">
       <section className="section-pad bg-leaf-50 dark:bg-[#0c2411]">
         <div className="container-page">
-          <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div className="mb-6 lg:mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <p className="text-sm font-extrabold uppercase tracking-[0.25em] text-soil dark:text-leaf-300">Secure Dashboard</p>
-              <h1 className="font-display text-5xl font-extrabold">Welcome, {user?.name || 'Owner'}</h1>
+              <p className="text-xs lg:text-sm font-extrabold uppercase tracking-[0.25em] text-soil dark:text-leaf-300">Secure Dashboard</p>
+              <h1 className="font-display text-3xl md:text-5xl font-extrabold">Welcome, {user?.name || 'Owner'}</h1>
             </div>
             <button onClick={logout} className="btn-secondary"><LogOut size={18} /> Logout</button>
           </div>
           {/* Main Tabbed Grid Layout */}
-          <div className="flex flex-col lg:flex-row gap-8 mt-6">
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 mt-6">
             
             {/* Sidebar Navigation */}
             <div className="w-full lg:w-64 shrink-0 no-print">
-              <div className="glass rounded-[2rem] p-4 flex flex-col gap-1 sticky top-28">
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-soil dark:text-leaf-300 px-4 py-2.5 border-b border-leaf-700/5 mb-2">Management Tabs</p>
+              <div className="glass rounded-[1.5rem] lg:rounded-[2rem] p-2.5 lg:p-4 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible gap-2 lg:gap-1.5 sticky top-20 lg:top-28 scrollbar-none">
+                <p className="hidden lg:block text-[10px] font-extrabold uppercase tracking-widest text-soil dark:text-leaf-300 px-4 py-2.5 border-b border-leaf-700/5 mb-2">Management Tabs</p>
                 <TabButton id="overview" icon={BarChart3} label="Overview & Stats" activeTab={activeTab} onClick={handleTabChange} />
                 <TabButton id="plants" icon={Leaf} label="Plant Inventory" activeTab={activeTab} onClick={handleTabChange} />
                 <TabButton id="billing" icon={FileText} label="Billing System" activeTab={activeTab} onClick={handleTabChange} />
@@ -738,9 +738,9 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* KPI Glassmorphism Cards Grid */}
-                  <div className="grid gap-5 grid-cols-2 md:grid-cols-3">
+                  <div className="grid gap-4 lg:gap-5 grid-cols-2 md:grid-cols-3">
                     {/* Today's Sales */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -760,7 +760,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Monthly Revenue */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -780,7 +780,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Plants in Inventory */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -798,7 +798,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Low Stock Products */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -818,7 +818,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Pending Reviews */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -837,7 +837,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Active Labour Count */}
-                    <div className="glass rounded-[2rem] p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
+                    <div className="glass rounded-[1.25rem] md:rounded-[2rem] p-4 md:p-6 hover:-translate-y-1 transition-all duration-300 shadow-sm relative overflow-hidden group text-left">
                       <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-leaf-500/5 group-hover:scale-125 transition-transform duration-500" />
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -855,7 +855,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Monthly Payroll Roster breakdown */}
-                  <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 text-left">
+                  <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 text-left">
                     <div className="mb-4 flex items-center justify-between border-b border-leaf-700/5 pb-3">
                       <h3 className="text-lg font-bold flex items-center gap-2 text-leaf-950 dark:text-white">
                         <DollarSign className="text-green-600 shrink-0" size={19} /> Monthly Payroll Cost (₹)
@@ -881,7 +881,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Inventory category breakdown */}
-                  <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 text-left">
+                  <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 text-left">
                     <div className="mb-4 border-b border-leaf-700/5 pb-3">
                       <h3 className="text-lg font-bold flex items-center gap-2 text-leaf-950 dark:text-white">
                         <Package className="text-leaf-650 shrink-0" size={19} /> Plant Inventory Breakdown
@@ -905,7 +905,7 @@ export default function AdminDashboard() {
                   <div className="grid gap-6 md:grid-cols-2">
                     
                     {/* AreaChart: Sales Volume Trend */}
-                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                    <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
                       <div className="mb-4">
                         <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Sales Volume Trend (Last 30 Days)</h4>
                       </div>
@@ -929,7 +929,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* LineChart: Cumulative Last 30 Days Revenue */}
-                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                    <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
                       <div className="mb-4">
                         <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Cumulative Revenue Growth (30 Days)</h4>
                       </div>
@@ -947,7 +947,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* BarChart: Daily Sales Graph */}
-                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                    <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
                       <div className="mb-4">
                         <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Daily Sales (Day-by-Day amount)</h4>
                       </div>
@@ -965,7 +965,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* BarChart: Monthly Growth Comparison */}
-                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
+                    <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 flex flex-col justify-between text-left">
                       <div className="mb-4">
                         <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Monthly Sales Growth Comparison</h4>
                       </div>
@@ -983,7 +983,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* PieChart: Category Distribution */}
-                    <div className="glass rounded-[2.5rem] p-6 border border-leaf-700/10 flex flex-col justify-between md:col-span-2 text-left">
+                    <div className="glass rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 border border-leaf-700/10 flex flex-col justify-between md:col-span-2 text-left">
                       <div className="mb-4">
                         <h4 className="font-extrabold text-sm text-leaf-900 dark:text-white">Plant Categories Variety Distribution</h4>
                       </div>
@@ -1028,8 +1028,8 @@ export default function AdminDashboard() {
 
               {/* Tab 2: Plant Inventory */}
               {activeTab === 'plants' && (
-                <div className="grid gap-8 xl:grid-cols-[1fr_0.75fr] animate-in fade-in duration-300">
-                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 text-left border border-leaf-700/5">
+                <div className="grid gap-8 2xl:grid-cols-[1.25fr_0.75fr] animate-in fade-in duration-300">
+                  <div className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 text-left border border-leaf-700/5">
                     <div className="mb-5 flex items-center justify-between gap-4">
                       <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Leaf /> Plant Management</h2>
                       <label className="flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 border border-leaf-700/10 dark:bg-[#0c2411]">
@@ -1100,7 +1100,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <aside className="space-y-6">
-                    <form onSubmit={addPlant} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                    <form onSubmit={addPlant} className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
                       <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Plus /> Add New Plant</h2>
                       <div className="grid gap-3">
                         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
@@ -1126,8 +1126,8 @@ export default function AdminDashboard() {
 
               {/* Tab 3: Billing System */}
               {activeTab === 'billing' && (
-                <div className="grid gap-8 xl:grid-cols-[1fr_0.75fr] animate-in fade-in duration-300">
-                  <form onSubmit={saveBill} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                <div className="grid gap-8 2xl:grid-cols-[1.25fr_0.75fr] animate-in fade-in duration-300">
+                  <form onSubmit={saveBill} className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
                     <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
                       <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><FileText /> Billing System</h2>
                       <select value={billForm.type} onChange={(event) => setBillForm({ ...billForm, type: event.target.value })} className="rounded-full border border-leaf-700/20 bg-transparent px-4 py-2 font-bold outline-none">
@@ -1206,7 +1206,7 @@ export default function AdminDashboard() {
                     </div>
                   </form>
 
-                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                  <div className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
                     <div className="mb-5 flex items-center justify-between gap-4">
                       <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><FileText /> Bills & Quotations</h2>
                       <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{bills.length}</span>
@@ -1258,8 +1258,8 @@ export default function AdminDashboard() {
 
               {/* Tab 4: Past Work Projects */}
               {activeTab === 'projects' && (
-                <div className="grid gap-8 xl:grid-cols-[0.75fr_1.25fr] animate-in fade-in duration-300">
-                  <form onSubmit={addOrUpdateProject} className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                <div className="grid gap-8 2xl:grid-cols-[0.75fr_1.25fr] animate-in fade-in duration-300">
+                  <form onSubmit={addOrUpdateProject} className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
                     <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white">
                       <BriefcaseBusiness /> {editingProjectId ? 'Edit Past Work' : 'Add Past Work'}
                     </h2>
@@ -1379,7 +1379,7 @@ export default function AdminDashboard() {
                     </div>
                   </form>
 
-                  <div className="rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
+                  <div className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
                     <div className="mb-5 flex items-center justify-between gap-4">
                       <h2 className="flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><BriefcaseBusiness /> Past Work Management</h2>
                       <span className="rounded-full bg-leaf-100 px-4 py-2 text-sm font-bold text-leaf-900 dark:bg-leaf-700 dark:text-white">{managedProjects.length} works</span>
@@ -1413,7 +1413,7 @@ export default function AdminDashboard() {
 
               {/* Tab 6: Review Approvals */}
               {activeTab === 'reviews' && (
-                <div className="max-w-4xl mx-auto rounded-[2.5rem] bg-white p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left animate-in fade-in duration-300">
+                <div className="max-w-4xl mx-auto rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left animate-in fade-in duration-300">
                   <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Star /> Review Approvals</h2>
                   <div className="space-y-4 max-h-[70vh] overflow-y-auto">
                     {adminReviews.length === 0 && <p className="text-sm text-leaf-900/60 dark:text-leaf-100/70 p-5 text-center">No reviews found in the database.</p>}
@@ -1669,7 +1669,7 @@ function TabButton({ id, icon: Icon, label, activeTab, onClick }) {
     <button
       type="button"
       onClick={() => onClick(id)}
-      className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 ${
+      className={`flex items-center gap-2.5 whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-xs lg:text-sm font-bold transition-all duration-300 ${
         isActive 
           ? 'bg-leaf-700 text-white shadow-md' 
           : 'text-leaf-900/70 hover:text-leaf-900 hover:bg-leaf-50 dark:text-leaf-300 dark:hover:text-white dark:hover:bg-leaf-800'
