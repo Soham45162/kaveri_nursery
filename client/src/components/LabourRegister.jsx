@@ -267,12 +267,18 @@ export default function LabourRegister() {
     const labour = labours.find(l => l.id === labourId);
     const currentStatus = attendance[labourId]?.[day];
     let nextStatus;
-    
-    const newAttendance = { ...attendance };
-    if (!newAttendance[labourId]) newAttendance[labourId] = {};
 
-    if (currentStatus === 'Custom') {
-      const defaultRate = attendance[labourId][`${day}_amount`] || labour?.salaryRate || '';
+    if (!currentStatus) {
+      nextStatus = 'Full';
+    } else if (currentStatus === 'Full') {
+      nextStatus = 'Half';
+    } else if (currentStatus === 'Half') {
+      nextStatus = 'Absent';
+    } else if (currentStatus === 'Absent') {
+      nextStatus = 'Custom';
+    } else if (currentStatus === 'Custom') {
+      // Prompt to edit or clear
+      const defaultRate = attendance[labourId]?.[`${day}_amount`] || labour?.salaryRate || '';
       const amountStr = prompt(`Enter new custom wage amount for ${labour?.name || 'worker'} on day ${day} (leave empty or click Cancel to clear attendance):`, defaultRate);
       if (amountStr === null || amountStr.trim() === '') {
         nextStatus = null; // Clear attendance
@@ -282,7 +288,13 @@ export default function LabourRegister() {
           alert("Please enter a valid wage amount.");
           return;
         }
-        newAttendance[labourId][`${day}_amount`] = amount;
+        const newAttendance = {
+          ...attendance,
+          [labourId]: {
+            ...(attendance[labourId] || {}),
+            [`${day}_amount`]: amount
+          }
+        };
         setAttendance(newAttendance);
         try {
           const docRef = doc(db, 'attendance', monthKey);
@@ -292,19 +304,20 @@ export default function LabourRegister() {
         }
         return;
       }
-    } else {
-      if (!currentStatus) nextStatus = 'Full';
-      else if (currentStatus === 'Full') nextStatus = 'Half';
-      else if (currentStatus === 'Half') nextStatus = 'Absent';
-      else if (currentStatus === 'Absent') nextStatus = 'Custom';
     }
+
+    const newAttendance = {
+      ...attendance,
+      [labourId]: {
+        ...(attendance[labourId] || {})
+      }
+    };
 
     if (nextStatus === 'Custom') {
       const defaultRate = labour?.salaryRate || '';
       const amountStr = prompt(`Enter custom salary amount for ${labour?.name || 'worker'} on day ${day} (default daily rate is ₹${defaultRate}):`, defaultRate);
       if (amountStr === null || amountStr.trim() === '') {
-        // User cancelled or left empty, clear status to Empty/null instead of getting stuck
-        nextStatus = null;
+        nextStatus = null; // Clear/Cancel
       } else {
         const amount = Number(amountStr);
         if (isNaN(amount) || amount < 0) {
@@ -325,7 +338,7 @@ export default function LabourRegister() {
         delete newAttendance[labourId][`${day}_amount`];
       }
     }
-    
+
     setAttendance(newAttendance);
 
     try {
@@ -335,6 +348,7 @@ export default function LabourRegister() {
       console.error("Error updating attendance state in database:", err);
     }
   };
+
 
   // Salary Payments and Advances Record Triggers
   const recordPayment = async (e) => {
