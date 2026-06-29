@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
@@ -47,6 +47,7 @@ export default function LabourRegister() {
   const [viewingHistoryLabourId, setViewingHistoryLabourId] = useState(null);
   const [historyTab, setHistoryTab] = useState('payments'); // 'payments' or 'advances'
   const [viewingSlipLabour, setViewingSlipLabour] = useState(null);
+  const [customWageInput, setCustomWageInput] = useState(null); // { labourId, day, name, currentAmount, isNew }
   
   // Custom states for UI features
   const [unmaskedAadhaarIds, setUnmaskedAadhaarIds] = useState({});
@@ -474,6 +475,81 @@ export default function LabourRegister() {
     return { full, half, absent, custom, customAmount };
   };
 
+  const grandTotals = useMemo(() => {
+    let full = 0, half = 0, absent = 0, custom = 0, customAmount = 0;
+    labours.forEach(labour => {
+      const totals = calculateTotals(labour.id);
+      full += totals.full;
+      half += totals.half;
+      absent += totals.absent;
+      custom += totals.custom;
+      customAmount += totals.customAmount;
+    });
+    return { full, half, absent, custom, customAmount };
+  }, [labours, attendance]);
+
+  const payrollTotals = useMemo(() => {
+    let workedDays = 0;
+    let grossSalary = 0;
+    let salaryCut = 0;
+    let netSalary = 0;
+    let totalAdvance = 0;
+    let netPayable = 0;
+    let totalPaid = 0;
+    let balanceDue = 0;
+
+    labours.forEach(labour => {
+      const totals = calculateTotals(labour.id);
+      const wDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+      const standardWorkedDays = totals.full + 0.5 * totals.half;
+      
+      const salaryType = labour.salaryType || 'daily';
+      const salaryRate = labour.salaryRate || 0;
+      
+      let gross = 0;
+      let cut = 0;
+      let net = 0;
+      
+      if (salaryType === 'monthly') {
+        gross = salaryRate;
+        net = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
+        cut = gross - net;
+      } else {
+        gross = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
+        net = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
+        cut = gross - net;
+      }
+      
+      const labourAdvances = advances[labour.id] || [];
+      const adv = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
+      const payable = net - adv;
+      
+      const labourPayments = payments[labour.id] || [];
+      const paid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
+      const balance = payable - paid;
+
+      workedDays += wDays;
+      grossSalary += gross;
+      salaryCut += cut;
+      netSalary += net;
+      totalAdvance += adv;
+      netPayable += payable;
+      totalPaid += paid;
+      balanceDue += balance;
+    });
+
+    return {
+      workedDays,
+      grossSalary,
+      salaryCut,
+      netSalary,
+      totalAdvance,
+      netPayable,
+      totalPaid,
+      balanceDue
+    };
+  }, [labours, attendance, advances, payments, daysInMonth]);
+
   const getStatusColor = (status) => {
     if (status === 'Full') return 'bg-green-500 text-white shadow-sm';
     if (status === 'Half') return 'bg-amber-400 text-amber-950 shadow-sm font-bold';
@@ -896,43 +972,62 @@ export default function LabourRegister() {
                   <th className="p-3 text-center border-r border-leaf-700/10 text-green-700 w-10">F</th>
                   <th className="p-3 text-center border-r border-leaf-700/10 text-amber-600 w-10">H</th>
                   <th className="p-3 text-center border-r border-leaf-700/10 text-red-600 w-10">A</th>
-                  <th className="p-3 text-center border-leaf-700/10 text-purple-750 dark:text-purple-300 w-10">C</th>
+                  <th className="p-3 text-center border-r border-leaf-700/10 text-purple-750 dark:text-purple-300 w-10">C</th>
+                  <th className="p-3 text-right text-purple-750 dark:text-purple-300 min-w-[85px]">C. Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {labours.length === 0 ? (
                   <tr>
-                    <td colSpan={daysInMonth + 5} className="p-6 text-center text-gray-500">No registered workers found to record attendance.</td>
+                    <td colSpan={daysInMonth + 6} className="p-6 text-center text-gray-500">No registered workers found to record attendance.</td>
                   </tr>
-                ) : labours.map(labour => {
-                  const totals = calculateTotals(labour.id);
-                  return (
-                    <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20 transition-all">
-                      <td className="p-3 border-r border-leaf-700/10 font-bold sticky left-0 bg-white dark:bg-leaf-900/90 shadow-r z-10">
-                        {labour.name}
-                        <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
-                      </td>
-                      {daysArray.map(day => {
-                        const status = attendance[labour.id]?.[day];
-                        return (
-                          <td key={day} className="border-r border-leaf-700/10 p-1 text-center">
-                            <button 
-                              onClick={() => toggleStatus(labour.id, day)}
-                              className={`h-7 rounded font-bold text-[9px] transition-all flex items-center justify-center mx-auto ${status === 'Custom' ? 'w-auto px-1 min-w-[28px]' : 'w-7'} ${getStatusColor(status)} no-print-bg`}
-                              title={status === 'Custom' ? `Custom Wage: ₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : undefined}
-                            >
-                              {status === 'Custom' ? `₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : getStatusIcon(status)}
-                            </button>
+                ) : (
+                  <>
+                    {labours.map(labour => {
+                      const totals = calculateTotals(labour.id);
+                      return (
+                        <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20 transition-all">
+                          <td className="p-3 border-r border-leaf-700/10 font-bold sticky left-0 bg-white dark:bg-leaf-900/90 shadow-r z-10">
+                            {labour.name}
+                            <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
                           </td>
-                        )
-                      })}
-                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-green-600">{totals.full}</td>
-                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-amber-600">{totals.half}</td>
-                      <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-red-500">{totals.absent}</td>
-                      <td className="p-3 text-center font-bold text-purple-650 dark:text-purple-400">{totals.custom}</td>
+                          {daysArray.map(day => {
+                            const status = attendance[labour.id]?.[day];
+                            return (
+                              <td key={day} className="border-r border-leaf-700/10 p-1 text-center">
+                                <button 
+                                  onClick={() => toggleStatus(labour.id, day)}
+                                  className={`h-7 rounded font-bold text-[9px] transition-all flex items-center justify-center mx-auto ${status === 'Custom' ? 'w-auto px-1 min-w-[28px]' : 'w-7'} ${getStatusColor(status)} no-print-bg`}
+                                  title={status === 'Custom' ? `Custom Wage: ₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : undefined}
+                                >
+                                  {status === 'Custom' ? `₹${attendance[labour.id]?.[`${day}_amount`] || 0}` : getStatusIcon(status)}
+                                </button>
+                              </td>
+                            )
+                          })}
+                          <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-green-600">{totals.full}</td>
+                          <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-amber-600">{totals.half}</td>
+                          <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-red-500">{totals.absent}</td>
+                          <td className="p-3 text-center border-r border-leaf-700/10 font-bold text-purple-650 dark:text-purple-400">{totals.custom}</td>
+                          <td className="p-3 text-right font-bold text-purple-650 dark:text-purple-400">₹{(totals.customAmount || 0).toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
+                    <tr className="bg-leaf-50/50 dark:bg-leaf-900/40 font-bold border-t-2 border-leaf-700/20 text-[11px]">
+                      <td className="p-3 border-r border-leaf-700/10 sticky left-0 bg-leaf-50 dark:bg-leaf-900/90 shadow-r z-10 uppercase tracking-wider text-[10px]">
+                        Grand Total
+                      </td>
+                      {daysArray.map(day => (
+                        <td key={day} className="border-r border-leaf-700/10 p-1 text-center text-gray-400 font-normal">-</td>
+                      ))}
+                      <td className="p-3 text-center border-r border-leaf-700/10 text-green-600">{grandTotals.full}</td>
+                      <td className="p-3 text-center border-r border-leaf-700/10 text-amber-600">{grandTotals.half}</td>
+                      <td className="p-3 text-center border-r border-leaf-700/10 text-red-500">{grandTotals.absent}</td>
+                      <td className="p-3 text-center border-r border-leaf-700/10 text-purple-650 dark:text-purple-400">{grandTotals.custom}</td>
+                      <td className="p-3 text-right text-purple-650 dark:text-purple-400">₹{grandTotals.customAmount.toLocaleString()}</td>
                     </tr>
-                  )
-                })}
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -1003,99 +1098,120 @@ export default function LabourRegister() {
                   <tr>
                     <td colSpan="11" className="p-6 text-center text-gray-500">No registered workers found to display payroll.</td>
                   </tr>
-                ) : labours.map(labour => {
-                  const totals = calculateTotals(labour.id);
-                  const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
-                  const standardWorkedDays = totals.full + 0.5 * totals.half;
-                  
-                  const salaryType = labour.salaryType || 'daily';
-                  const salaryRate = labour.salaryRate || 0;
-                  
-                  let grossSalary = 0;
-                  let salaryCut = 0;
-                  let netSalary = 0;
-                  
-                  if (salaryType === 'monthly') {
-                    grossSalary = salaryRate;
-                    netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
-                    salaryCut = grossSalary - netSalary;
-                  } else {
-                    grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
-                    netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
-                    salaryCut = grossSalary - netSalary;
-                  }
-                  
-                  const labourAdvances = advances[labour.id] || [];
-                  const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
-                  const netPayable = netSalary - totalAdvance;
-                  
-                  const labourPayments = payments[labour.id] || [];
-                  const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
-                  const balanceDue = netPayable - totalPaid;
-                  
-                  return (
-                    <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20">
-                      <td className="p-3 border-r border-leaf-700/10 font-bold">
-                        {labour.name}
-                        <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
-                      </td>
-                      <td className="p-3 border-r border-leaf-700/10">
-                        {salaryType === 'monthly' ? `₹${salaryRate.toLocaleString()}/m` : `₹${salaryRate.toLocaleString()}/d`}
-                      </td>
-                      <td className="p-3 border-r border-leaf-700/10 text-center font-bold">
-                        {workedDays} <span className="text-xxs font-normal text-gray-400">/ {daysInMonth}d</span>
-                      </td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right">₹{grossSalary.toLocaleString()}</td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right text-red-500 font-semibold">-₹{salaryCut.toLocaleString()}</td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-700 font-semibold">₹{netSalary.toLocaleString()}</td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right text-amber-600 font-semibold">₹{totalAdvance.toLocaleString()}</td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-800 font-extrabold">₹{netPayable.toLocaleString()}</td>
-                      <td className="p-3 border-r border-leaf-700/10 text-right font-semibold text-leaf-700 dark:text-leaf-300">₹{totalPaid.toLocaleString()}</td>
+                ) : (
+                  <>
+                    {labours.map(labour => {
+                      const totals = calculateTotals(labour.id);
+                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                      const standardWorkedDays = totals.full + 0.5 * totals.half;
+                      
+                      const salaryType = labour.salaryType || 'daily';
+                      const salaryRate = labour.salaryRate || 0;
+                      
+                      let grossSalary = 0;
+                      let salaryCut = 0;
+                      let netSalary = 0;
+                      
+                      if (salaryType === 'monthly') {
+                        grossSalary = salaryRate;
+                        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
+                        salaryCut = grossSalary - netSalary;
+                      } else {
+                        grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
+                        netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
+                        salaryCut = grossSalary - netSalary;
+                      }
+                      
+                      const labourAdvances = advances[labour.id] || [];
+                      const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
+                      const netPayable = netSalary - totalAdvance;
+                      
+                      const labourPayments = payments[labour.id] || [];
+                      const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
+                      const balanceDue = netPayable - totalPaid;
+                      
+                      return (
+                        <tr key={labour.id} className="border-b border-leaf-700/10 hover:bg-cream/10 dark:hover:bg-leaf-900/20">
+                          <td className="p-3 border-r border-leaf-700/10 font-bold">
+                            {labour.name}
+                            <span className="block text-xxs font-normal text-gray-500">{labour.skillType || labour.role || 'Gardener'}</span>
+                          </td>
+                          <td className="p-3 border-r border-leaf-700/10">
+                            {salaryType === 'monthly' ? `₹${salaryRate.toLocaleString()}/m` : `₹${salaryRate.toLocaleString()}/d`}
+                          </td>
+                          <td className="p-3 border-r border-leaf-700/10 text-center font-bold">
+                            {workedDays} <span className="text-xxs font-normal text-gray-400">/ {daysInMonth}d</span>
+                          </td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right">₹{grossSalary.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right text-red-500 font-semibold">-₹{salaryCut.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right text-green-700 font-semibold">₹{netSalary.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right text-amber-600 font-semibold">₹{totalAdvance.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right text-green-800 font-extrabold">₹{netPayable.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right font-semibold text-leaf-700 dark:text-leaf-300">₹{totalPaid.toLocaleString()}</td>
+                          <td className="p-3 border-r border-leaf-700/10 text-right font-extrabold">
+                            <span className={balanceDue > 0 ? 'text-amber-600' : balanceDue < 0 ? 'text-red-500' : 'text-gray-500'}>
+                              ₹{balanceDue.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center no-print">
+                            <div className="flex justify-center gap-1.5">
+                              <button 
+                                onClick={() => {
+                                  setPayingLabourId(labour.id);
+                                  setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+                                }}
+                                className="inline-flex items-center gap-0.5 bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                              >
+                                <DollarSign size={10} /> Pay
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setRecordingAdvanceLabourId(labour.id);
+                                  setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+                                }}
+                                className="inline-flex items-center gap-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                              >
+                                <Coins size={10} /> Advance
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setViewingHistoryLabourId(labour.id);
+                                  setHistoryTab('payments');
+                                }}
+                                className="inline-flex items-center gap-0.5 bg-gray-100 hover:bg-gray-200 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 py-1 px-2 rounded-lg text-xxs transition-colors"
+                              >
+                                <History size={10} /> Logs
+                              </button>
+                              <button 
+                                onClick={() => setViewingSlipLabour(labour)}
+                                className="inline-flex items-center gap-0.5 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
+                              >
+                                <FileText size={10} /> Slip
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-leaf-50/50 dark:bg-leaf-900/40 font-bold border-t-2 border-leaf-700/20 text-[11px]">
+                      <td className="p-3 border-r border-leaf-700/10 font-black uppercase text-soil dark:text-leaf-300">Grand Total</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-gray-400 font-normal">-</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-center font-bold">{payrollTotals.workedDays}d</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right">₹{payrollTotals.grossSalary.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-red-500 font-bold">-₹{payrollTotals.salaryCut.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-700 font-bold">₹{payrollTotals.netSalary.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-amber-600 font-bold">₹{payrollTotals.totalAdvance.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right text-green-800 font-extrabold">₹{payrollTotals.netPayable.toLocaleString()}</td>
+                      <td className="p-3 border-r border-leaf-700/10 text-right font-semibold text-leaf-700 dark:text-leaf-300">₹{payrollTotals.totalPaid.toLocaleString()}</td>
                       <td className="p-3 border-r border-leaf-700/10 text-right font-extrabold">
-                        <span className={balanceDue > 0 ? 'text-amber-600' : balanceDue < 0 ? 'text-red-500' : 'text-gray-500'}>
-                          ₹{balanceDue.toLocaleString()}
+                        <span className={payrollTotals.balanceDue > 0 ? 'text-amber-600' : payrollTotals.balanceDue < 0 ? 'text-red-500' : 'text-gray-500'}>
+                          ₹{payrollTotals.balanceDue.toLocaleString()}
                         </span>
                       </td>
-                      <td className="p-3 text-center no-print">
-                        <div className="flex justify-center gap-1.5">
-                          <button 
-                            onClick={() => {
-                              setPayingLabourId(labour.id);
-                              setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-                            }}
-                            className="inline-flex items-center gap-0.5 bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
-                          >
-                            <DollarSign size={10} /> Pay
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setRecordingAdvanceLabourId(labour.id);
-                              setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-                            }}
-                            className="inline-flex items-center gap-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
-                          >
-                            <Coins size={10} /> Advance
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setViewingHistoryLabourId(labour.id);
-                              setHistoryTab('payments');
-                            }}
-                            className="inline-flex items-center gap-0.5 bg-gray-100 hover:bg-gray-200 dark:bg-leaf-800 dark:hover:bg-leaf-700 text-gray-800 dark:text-gray-200 py-1 px-2 rounded-lg text-xxs transition-colors"
-                          >
-                            <History size={10} /> Logs
-                          </button>
-                          <button 
-                            onClick={() => setViewingSlipLabour(labour)}
-                            className="inline-flex items-center gap-0.5 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg text-xxs transition-colors"
-                          >
-                            <FileText size={10} /> Slip
-                          </button>
-                        </div>
-                      </td>
+                      <td className="p-3 text-center no-print"></td>
                     </tr>
-                  );
-                })}
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -1169,23 +1285,48 @@ export default function LabourRegister() {
                       <tr>
                         <td colSpan="8" className="p-4 text-center text-gray-500 dark:text-leaf-300">No attendance reports available.</td>
                       </tr>
-                    ) : labours.map(labour => {
-                      const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
-                      const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
-                      return (
-                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
-                          <td className="p-3 font-bold">{labour.name}</td>
-                          <td className="p-3">{labour.skillType || labour.role || 'Gardener'}</td>
-                          <td className="p-3 text-center text-green-700 dark:text-green-400 font-semibold">{totals.full}</td>
-                          <td className="p-3 text-center text-amber-600 dark:text-amber-300 font-semibold">{totals.half}</td>
-                          <td className="p-3 text-center text-red-600 dark:text-red-400 font-semibold">{totals.absent}</td>
-                          <td className="p-3 text-center text-purple-650 dark:text-purple-400 font-semibold">{totals.custom || 0}</td>
-                          <td className="p-3 text-center font-bold">{workedDays} Days</td>
-                          <td className="p-3 text-right font-extrabold text-gray-800 dark:text-leaf-100">{attendancePercent}%</td>
+                    ) : (
+                      <>
+                        {labours.map(labour => {
+                          const totals = calculateTotals(labour.id);
+                          const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                          const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
+                          return (
+                            <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
+                              <td className="p-3 font-bold">{labour.name}</td>
+                              <td className="p-3">{labour.skillType || labour.role || 'Gardener'}</td>
+                              <td className="p-3 text-center text-green-700 dark:text-green-400 font-semibold">{totals.full}</td>
+                              <td className="p-3 text-center text-amber-600 dark:text-amber-300 font-semibold">{totals.half}</td>
+                              <td className="p-3 text-center text-red-650 dark:text-red-400 font-semibold">{totals.absent}</td>
+                              <td className="p-3 text-center text-purple-650 dark:text-purple-400 font-semibold">{totals.custom || 0}</td>
+                              <td className="p-3 text-center font-bold">{workedDays} Days</td>
+                              <td className="p-3 text-right font-extrabold text-gray-800 dark:text-leaf-100">{attendancePercent}%</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-gray-100 dark:bg-leaf-900/40 font-extrabold text-[11px] border-t-2 border-gray-400 dark:border-leaf-700">
+                          <td className="p-3 uppercase">Grand Total</td>
+                          <td className="p-3 text-gray-400 font-normal">-</td>
+                          <td className="p-3 text-center text-green-700 dark:text-green-400 font-semibold">{grandTotals.full}</td>
+                          <td className="p-3 text-center text-amber-600 dark:text-amber-300 font-semibold">{grandTotals.half}</td>
+                          <td className="p-3 text-center text-red-650 dark:text-red-400 font-semibold">{grandTotals.absent}</td>
+                          <td className="p-3 text-center text-purple-650 dark:text-purple-400 font-semibold">{grandTotals.custom}</td>
+                          <td className="p-3 text-center">{payrollTotals.workedDays} Days</td>
+                          <td className="p-3 text-right">
+                            {(() => {
+                              const avgPct = Math.min(100, Math.round(
+                                (labours.reduce((sum, labour) => {
+                                  const totals = calculateTotals(labour.id);
+                                  const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                                  return sum + (workedDays / daysInMonth);
+                                }, 0) / labours.length) * 100
+                              ));
+                              return `${avgPct}%`;
+                            })()}
+                          </td>
                         </tr>
-                      );
-                    })}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1214,55 +1355,71 @@ export default function LabourRegister() {
                       <tr>
                         <td colSpan="10" className="p-4 text-center text-gray-500 dark:text-leaf-300">No salary reports available.</td>
                       </tr>
-                    ) : labours.map(labour => {
-                      const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
-                      const standardWorkedDays = totals.full + 0.5 * totals.half;
-                      const salaryRate = labour.salaryRate || 0;
-                      const salaryType = labour.salaryType || 'daily';
-                      
-                      let grossSalary = 0;
-                      let salaryCut = 0;
-                      let netSalary = 0;
-                      
-                      if (salaryType === 'monthly') {
-                        grossSalary = salaryRate;
-                        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
-                        salaryCut = grossSalary - netSalary;
-                      } else {
-                        grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
-                        netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
-                        salaryCut = grossSalary - netSalary;
-                      }
-                      
-                      const labourAdvances = advances[labour.id] || [];
-                      const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
-                      const netPayable = netSalary - totalAdvance;
-                      
-                      const labourPayments = payments[labour.id] || [];
-                      const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
-                      const balanceDue = netPayable - totalPaid;
-                      
-                      return (
-                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
-                          <td className="p-3 font-bold">
-                            {labour.name}
-                            <span className="block text-xxs font-normal text-gray-400 dark:text-leaf-300/60">{labour.skillType || labour.role || 'Gardener'}</span>
-                          </td>
-                          <td className="p-3">
-                            ₹{salaryRate}/{salaryType === 'monthly' ? 'm' : 'd'}
-                          </td>
-                          <td className="p-3 text-center font-bold">{workedDays} Days</td>
-                          <td className="p-3 text-right">₹{grossSalary.toLocaleString()}</td>
-                          <td className="p-3 text-right text-red-600 dark:text-red-400 font-semibold">-₹{salaryCut.toLocaleString()}</td>
-                          <td className="p-3 text-right text-green-700 dark:text-green-400 font-semibold">₹{netSalary.toLocaleString()}</td>
-                          <td className="p-3 text-right text-amber-600 dark:text-amber-300 font-semibold">₹{totalAdvance.toLocaleString()}</td>
-                          <td className="p-3 text-right font-extrabold">₹{netPayable.toLocaleString()}</td>
-                          <td className="p-3 text-right text-gray-700 dark:text-leaf-200">₹{totalPaid.toLocaleString()}</td>
-                          <td className="p-3 text-right font-extrabold text-blue-700 dark:text-blue-300">₹{balanceDue.toLocaleString()}</td>
+                    ) : (
+                      <>
+                        {labours.map(labour => {
+                          const totals = calculateTotals(labour.id);
+                          const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                          const standardWorkedDays = totals.full + 0.5 * totals.half;
+                          const salaryRate = labour.salaryRate || 0;
+                          const salaryType = labour.salaryType || 'daily';
+                          
+                          let grossSalary = 0;
+                          let salaryCut = 0;
+                          let netSalary = 0;
+                          
+                          if (salaryType === 'monthly') {
+                            grossSalary = salaryRate;
+                            netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
+                            salaryCut = grossSalary - netSalary;
+                          } else {
+                            grossSalary = Math.round(salaryRate * (daysInMonth - (totals.custom || 0)) + (totals.customAmount || 0));
+                            netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
+                            salaryCut = grossSalary - netSalary;
+                          }
+                          
+                          const labourAdvances = advances[labour.id] || [];
+                          const totalAdvance = labourAdvances.reduce((sum, tx) => sum + tx.amount, 0);
+                          const netPayable = netSalary - totalAdvance;
+                          
+                          const labourPayments = payments[labour.id] || [];
+                          const totalPaid = labourPayments.reduce((sum, tx) => sum + tx.amount, 0);
+                          const balanceDue = netPayable - totalPaid;
+                          
+                          return (
+                            <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
+                              <td className="p-3 font-bold">
+                                {labour.name}
+                                <span className="block text-xxs font-normal text-gray-400 dark:text-leaf-300/60">{labour.skillType || labour.role || 'Gardener'}</span>
+                              </td>
+                              <td className="p-3">
+                                ₹{salaryRate}/{salaryType === 'monthly' ? 'm' : 'd'}
+                              </td>
+                              <td className="p-3 text-center font-bold">{workedDays} Days</td>
+                              <td className="p-3 text-right">₹{grossSalary.toLocaleString()}</td>
+                              <td className="p-3 text-right text-red-650 dark:text-red-400 font-semibold">-₹{salaryCut.toLocaleString()}</td>
+                              <td className="p-3 text-right text-green-700 dark:text-green-400 font-semibold">₹{netSalary.toLocaleString()}</td>
+                              <td className="p-3 text-right text-amber-600 dark:text-amber-300 font-semibold">₹{totalAdvance.toLocaleString()}</td>
+                              <td className="p-3 text-right font-extrabold">₹{netPayable.toLocaleString()}</td>
+                              <td className="p-3 text-right text-gray-700 dark:text-leaf-200">₹{totalPaid.toLocaleString()}</td>
+                              <td className="p-3 text-right font-extrabold text-blue-700 dark:text-blue-300">₹{balanceDue.toLocaleString()}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-gray-100 dark:bg-leaf-900/40 font-extrabold text-[11px] border-t-2 border-gray-400 dark:border-leaf-700">
+                          <td className="p-3 uppercase">Grand Total</td>
+                          <td className="p-3 text-gray-400 font-normal">-</td>
+                          <td className="p-3 text-center">{payrollTotals.workedDays} Days</td>
+                          <td className="p-3 text-right">₹{payrollTotals.grossSalary.toLocaleString()}</td>
+                          <td className="p-3 text-right text-red-655 dark:text-red-400 font-semibold">-₹{payrollTotals.salaryCut.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-700 dark:text-green-400 font-semibold">₹{payrollTotals.netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-right text-amber-600 dark:text-amber-300 font-semibold">₹{payrollTotals.totalAdvance.toLocaleString()}</td>
+                          <td className="p-3 text-right font-bold">₹{payrollTotals.netPayable.toLocaleString()}</td>
+                          <td className="p-3 text-right text-gray-700 dark:text-leaf-200">₹{payrollTotals.totalPaid.toLocaleString()}</td>
+                          <td className="p-3 text-right font-extrabold text-blue-700 dark:text-blue-300">₹{payrollTotals.balanceDue.toLocaleString()}</td>
                         </tr>
-                      );
-                    })}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1409,50 +1566,73 @@ export default function LabourRegister() {
                       <tr>
                         <td colSpan="6" className="p-4 text-center text-gray-500 dark:text-leaf-300">No worker performance records available.</td>
                       </tr>
-                    ) : labours.map(labour => {
-                      const totals = calculateTotals(labour.id);
-                      const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
-                      const standardWorkedDays = totals.full + 0.5 * totals.half;
-                      const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
-                      
-                      const salaryType = labour.salaryType || 'daily';
-                      const salaryRate = labour.salaryRate || 0;
-                      let netSalary = 0;
-                      if (salaryType === 'monthly') {
-                        netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
-                      } else {
-                        netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
-                      }
+                    ) : (
+                      <>
+                        {labours.map(labour => {
+                          const totals = calculateTotals(labour.id);
+                          const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                          const standardWorkedDays = totals.full + 0.5 * totals.half;
+                          const attendancePercent = Math.min(100, Math.round((workedDays / daysInMonth) * 100));
+                          
+                          const salaryType = labour.salaryType || 'daily';
+                          const salaryRate = labour.salaryRate || 0;
+                          let netSalary = 0;
+                          if (salaryType === 'monthly') {
+                            netSalary = Math.round((salaryRate / daysInMonth) * standardWorkedDays) + (totals.customAmount || 0);
+                          } else {
+                            netSalary = Math.round(salaryRate * standardWorkedDays) + (totals.customAmount || 0);
+                          }
 
-                      const rating = getPerformanceRating(workedDays);
+                          const rating = getPerformanceRating(workedDays);
 
-                      return (
-                        <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
-                          <td className="p-3">
-                            <div className="flex items-center gap-3">
-                              <img 
-                                src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80'} 
-                                alt={labour.name} 
-                                className="h-8 w-8 rounded-full object-cover border border-leaf-700/10"
-                              />
-                              <div>
-                                <strong className="text-gray-900 dark:text-leaf-100 block">{labour.name}</strong>
-                                <span className="text-xxs text-gray-500 dark:text-leaf-300/60">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
-                              </div>
-                            </div>
+                          return (
+                            <tr key={labour.id} className="border-b border-gray-200 dark:border-leaf-800/40">
+                              <td className="p-3">
+                                <div className="flex items-center gap-3">
+                                  <img 
+                                    src={labour.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80'} 
+                                    alt={labour.name} 
+                                    className="h-8 w-8 rounded-full object-cover border border-leaf-700/10"
+                                  />
+                                  <div>
+                                    <strong className="text-gray-900 dark:text-leaf-100 block">{labour.name}</strong>
+                                    <span className="text-xxs text-gray-500 dark:text-leaf-300/60">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3 font-semibold">{labour.skillType || labour.role || 'Gardener'}</td>
+                              <td className="p-3 text-center font-bold">{workedDays} / {daysInMonth} Days</td>
+                              <td className="p-3 text-center font-extrabold text-blue-700 dark:text-blue-300">{attendancePercent}%</td>
+                              <td className="p-3 text-right font-extrabold text-green-700 dark:text-green-400">₹{netSalary.toLocaleString()}</td>
+                              <td className="p-3 text-center">
+                                <span className={`inline-block px-3 py-1 rounded-full text-xxs font-extrabold uppercase ${rating.style}`}>
+                                  {rating.label}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-gray-100 dark:bg-leaf-900/40 font-extrabold text-[11px] border-t-2 border-gray-400 dark:border-leaf-700">
+                          <td className="p-3 uppercase">Grand Total</td>
+                          <td className="p-3 text-gray-400 font-normal">-</td>
+                          <td className="p-3 text-center font-bold">{payrollTotals.workedDays} / {daysInMonth * labours.length} Days</td>
+                          <td className="p-3 text-center font-extrabold">
+                            {(() => {
+                              const avgPct = Math.min(100, Math.round(
+                                (labours.reduce((sum, labour) => {
+                                  const totals = calculateTotals(labour.id);
+                                  const workedDays = totals.full + 0.5 * totals.half + (totals.custom || 0);
+                                  return sum + (workedDays / daysInMonth);
+                                }, 0) / labours.length) * 100
+                              ));
+                              return `${avgPct}%`;
+                            })()}
                           </td>
-                          <td className="p-3 font-semibold">{labour.skillType || labour.role || 'Gardener'}</td>
-                          <td className="p-3 text-center font-bold">{workedDays} / {daysInMonth} Days</td>
-                          <td className="p-3 text-center font-extrabold text-blue-700 dark:text-blue-300">{attendancePercent}%</td>
-                          <td className="p-3 text-right font-extrabold text-green-700 dark:text-green-400">₹{netSalary.toLocaleString()}</td>
-                          <td className="p-3 text-center">
-                            <span className={`inline-block px-3 py-1 rounded-full text-xxs font-extrabold uppercase ${rating.style}`}>
-                              {rating.label}
-                            </span>
-                          </td>
+                          <td className="p-3 text-right text-green-700 dark:text-green-400 font-extrabold">₹{payrollTotals.netSalary.toLocaleString()}</td>
+                          <td className="p-3 text-center text-gray-400 font-normal">-</td>
                         </tr>
-                      );
-                    })}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
