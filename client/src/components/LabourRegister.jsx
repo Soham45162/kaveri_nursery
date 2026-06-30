@@ -1792,7 +1792,7 @@ export default function LabourRegister() {
               <h3 className="text-xl font-extrabold flex items-center gap-2 text-purple-650 dark:text-purple-400">
                 <DollarSign size={20} /> {customWageInput.isNew ? "Enter Custom Daily Wage" : "Edit Custom Daily Wage"}
               </h3>
-              <button onClick={() => setCustomWageInput(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
+              <button onClick={handleCancelCustomWage} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
             </div>
             <p className="text-xs text-gray-500 dark:text-leaf-300/80 mb-4">Set custom wage for <strong>{customWageInput.name}</strong> on day <strong>{customWageInput.day}</strong>.</p>
             
@@ -1833,7 +1833,7 @@ export default function LabourRegister() {
                   )}
                 </div>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setCustomWageInput(null)} className="btn-secondary text-xs font-bold px-4 py-2">Cancel</button>
+                  <button type="button" onClick={handleCancelCustomWage} className="btn-secondary text-xs font-bold px-4 py-2">Cancel</button>
                   <button type="submit" className="btn-primary bg-purple-650 hover:bg-purple-750 border-none text-xs font-bold px-4 py-2 text-white">Save Wage</button>
                 </div>
               </div>
