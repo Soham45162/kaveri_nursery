@@ -313,6 +313,15 @@ export default function LabourRegister() {
     }
   };
 
+  const handleCancelCustomWage = async () => {
+    if (customWageInput) {
+      if (customWageInput.isNew) {
+        await updateAttendanceStatus(customWageInput.labourId, customWageInput.day, null);
+      }
+      setCustomWageInput(null);
+    }
+  };
+
 
 
   // Salary Payments and Advances Record Triggers
