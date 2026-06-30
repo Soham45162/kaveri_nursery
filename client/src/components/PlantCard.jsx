@@ -8,7 +8,16 @@ export default function PlantCard({ plant }) {
     <article className="group overflow-hidden rounded-2xl bg-white shadow-lg transition duration-300 hover:-translate-y-2 hover:shadow-glow dark:bg-leaf-900/60">
       <div className="relative h-64 overflow-hidden">
         <img src={plant.image} alt={plant.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        {plant.discount > 0 && <span className="absolute left-4 top-4 rounded-full bg-soil px-3 py-1 text-sm font-bold text-white">{plant.discount}% OFF</span>}
+        <div className="absolute left-4 top-4 flex flex-col gap-2 z-10">
+          {plant.discount > 0 && <span className="rounded-full bg-soil px-3 py-1 text-sm font-bold text-white w-fit">{plant.discount}% OFF</span>}
+          <span className={`rounded-full px-3 py-1 text-xxs font-extrabold text-white shadow-md backdrop-blur-sm w-fit uppercase tracking-wider ${
+            (plant.careLevel || '').toLowerCase() === 'expert' ? 'bg-red-500/90' :
+            (plant.careLevel || '').toLowerCase() === 'moderate' ? 'bg-amber-500/90' :
+            'bg-green-600/90'
+          }`}>
+            {(plant.careLevel || 'Easy') + ' Care'}
+          </span>
+        </div>
         <button className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/85 text-leaf-900 transition hover:bg-leaf-100">
           <Heart size={18} />
         </button>

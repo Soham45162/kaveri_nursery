@@ -18,6 +18,7 @@ const whatsappLink = (message) => `https://wa.me/${businessInfo.whatsappNumber}?
 export default function Home() {
   const [plantQuery, setPlantQuery] = useState('');
   const [plantCategory, setPlantCategory] = useState('All');
+  const [careLevelFilter, setCareLevelFilter] = useState('All');
   const [projectCategory, setProjectCategory] = useState('All');
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeLightboxImage, setActiveLightboxImage] = useState(null);
@@ -82,9 +83,10 @@ export default function Home() {
     return livePlants.filter((plant) => {
       const matchesQuery = [plant.name, plant.scientificName, plant.category].join(' ').toLowerCase().includes(plantQuery.toLowerCase());
       const matchesCategory = plantCategory === 'All' || plant.category === plantCategory;
-      return matchesQuery && matchesCategory;
+      const matchesCareLevel = careLevelFilter === 'All' || (plant.careLevel || 'Easy').toLowerCase() === careLevelFilter.toLowerCase();
+      return matchesQuery && matchesCategory && matchesCareLevel;
     });
-  }, [plantQuery, plantCategory, livePlants]);
+  }, [plantQuery, plantCategory, careLevelFilter, livePlants]);
 
   const filteredProjects = liveProjects.filter((project) => projectCategory === 'All' || project.category === projectCategory);
   const averageRating = customerReviews.length > 0 ? (customerReviews.reduce((sum, review) => sum + Number(review.rating), 0) / customerReviews.length).toFixed(1) : "5.0";
@@ -245,15 +247,37 @@ export default function Home() {
       <section id="knowledge" className="section-pad bg-leaf-50 dark:bg-[#0c2411]">
         <div className="container-page">
           <SectionHeader center eyebrow="Plant Knowledge" title="Learn what every plant needs before it reaches your home" text="Search plants by name, category, or scientific name and open care pages for full growth guidance." />
-          <div className="glass mb-8 grid gap-4 rounded-2xl p-4 md:grid-cols-[1fr_auto]">
-            <label className="flex items-center gap-3 rounded-full bg-white px-4 py-3 dark:bg-leaf-900">
-              <Search size={18} />
-              <input value={plantQuery} onChange={(event) => setPlantQuery(event.target.value)} placeholder="Search plants, categories, sunlight needs..." className="w-full bg-transparent outline-none" />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {plantCategories.map((category) => (
-                <button key={category} onClick={() => setPlantCategory(category)} className={`rounded-full px-4 py-2 text-sm font-bold ${plantCategory === category ? 'bg-leaf-700 text-white' : 'bg-white dark:bg-leaf-900'}`}>
-                  {category}
+          <div className="flex flex-col gap-4 mb-8 glass rounded-2xl p-4">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+              <label className="flex items-center gap-3 rounded-full bg-white px-4 py-3 dark:bg-leaf-900 flex-1">
+                <Search size={18} />
+                <input value={plantQuery} onChange={(event) => setPlantQuery(event.target.value)} placeholder="Search plants, categories, scientific names..." className="w-full bg-transparent outline-none" />
+              </label>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-leaf-900/60 dark:text-leaf-100/60 mr-1">Category:</span>
+                {plantCategories.map((category) => (
+                  <button key={category} onClick={() => setPlantCategory(category)} className={`rounded-full px-4 py-2 text-sm font-bold transition ${plantCategory === category ? 'bg-leaf-700 text-white' : 'bg-white dark:bg-leaf-900 dark:hover:bg-leaf-800'}`}>
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center border-t border-leaf-700/10 pt-4">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-leaf-900/60 dark:text-leaf-100/60 mr-1">Care Level:</span>
+              {['All', 'Easy', 'Moderate', 'Expert'].map((level) => (
+                <button 
+                  key={level} 
+                  onClick={() => setCareLevelFilter(level)} 
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition flex items-center gap-1.5 ${
+                    careLevelFilter === level 
+                      ? 'bg-leaf-700 text-white' 
+                      : 'bg-white dark:bg-leaf-900 dark:hover:bg-leaf-800'
+                  }`}
+                >
+                  {level === 'All' && 'All Care Levels'}
+                  {level === 'Easy' && <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Easy Care</span>}
+                  {level === 'Moderate' && <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Moderate Care</span>}
+                  {level === 'Expert' && <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Expert Care</span>}
                 </button>
               ))}
             </div>

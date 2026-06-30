@@ -57,7 +57,12 @@ export default function AdminDashboard() {
   const [inventory, setInventory] = useState([]);
   const [adminReviews, setAdminReviews] = useState([]);
   const [managedProjects, setManagedProjects] = useState([]);
-  const [form, setForm] = useState({ name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null });
+  const [form, setForm] = useState({ 
+    name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null,
+    careLevel: 'Easy', waterSchedule: '', sunlightReq: '', fertilizerGuide: '', soilType: '', growthRate: '',
+    bloomingSeason: '', commonDiseases: '', diseaseTreatment: '', careTips: '', seasonalCare: '', benefits: ''
+  });
+  const [editingPlantId, setEditingPlantId] = useState(null);
   const [billForm, setBillForm] = useState(emptyBillForm);
   const [bills, setBills] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
@@ -93,7 +98,7 @@ export default function AdminDashboard() {
     event.preventDefault();
     if (!form.name || !form.price || !form.stock) return;
 
-    let imageUrl = 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80';
+    let imageUrl = form.imageFile ? '' : (editingPlantId ? inventory.find(p => p._id === editingPlantId)?.image : 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80');
     if (form.imageFile) {
        const imageRef = ref(storage, `plants/${Date.now()}`);
        await uploadBytes(imageRef, form.imageFile);
@@ -101,24 +106,53 @@ export default function AdminDashboard() {
     }
 
     const plantData = {
-      ...form,
+      name: form.name,
+      scientificName: form.scientificName || 'Add scientific name',
+      category: form.category || 'Indoor',
       price: Number(form.price),
       stock: Number(form.stock),
-      discount: 0,
+      description: form.description || '',
+      discount: editingPlantId ? (inventory.find(p => p._id === editingPlantId)?.discount || 0) : 0,
       image: imageUrl,
-      scientificName: form.scientificName || 'Add scientific name',
-      water: 'Moderate', sunlight: 'Indirect light', soil: 'Well-drained soil', temperature: '18-32°C',
-      growthTips: 'Update growth tips from plant management.', fertilizer: 'Update fertilizer tips.',
-      benefits: 'Update plant benefits.', diseases: 'Update disease info.', seasonalCare: 'Update seasonal care.'
+      careLevel: form.careLevel || 'Easy',
+      waterSchedule: form.waterSchedule || '',
+      sunlightReq: form.sunlightReq || '',
+      fertilizerGuide: form.fertilizerGuide || '',
+      soilType: form.soilType || '',
+      growthRate: form.growthRate || '',
+      bloomingSeason: form.bloomingSeason || '',
+      commonDiseases: form.commonDiseases || '',
+      diseaseTreatment: form.diseaseTreatment || '',
+      careTips: form.careTips || '',
+      seasonalCare: form.seasonalCare || '',
+      benefits: form.benefits || '',
+      water: form.waterSchedule || 'Moderate',
+      sunlight: form.sunlightReq || 'Indirect light',
+      soil: form.soilType || 'Well-drained soil',
+      temperature: '18-32°C',
+      growthTips: form.careTips || 'Update growth tips from plant management.',
+      fertilizer: form.fertilizerGuide || 'Update fertilizer tips.',
+      diseases: form.commonDiseases || 'Update disease info.'
     };
-    delete plantData.imageFile;
 
     try {
-      const docRef = await addDoc(collection(db, 'plants'), plantData);
-      setInventory([{ _id: docRef.id, ...plantData }, ...inventory]);
-      setForm({ name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null });
+      if (editingPlantId) {
+        await updateDoc(doc(db, 'plants', editingPlantId), plantData);
+        setInventory(current => current.map(p => p._id === editingPlantId ? { ...p, ...plantData } : p));
+        setEditingPlantId(null);
+        alert("Plant updated successfully!");
+      } else {
+        const docRef = await addDoc(collection(db, 'plants'), plantData);
+        setInventory([{ _id: docRef.id, ...plantData }, ...inventory]);
+        alert("Plant added successfully!");
+      }
+      setForm({ 
+        name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null,
+        careLevel: 'Easy', waterSchedule: '', sunlightReq: '', fertilizerGuide: '', soilType: '', growthRate: '',
+        bloomingSeason: '', commonDiseases: '', diseaseTreatment: '', careTips: '', seasonalCare: '', benefits: ''
+      });
     } catch (e) {
-      console.error("Error adding plant", e);
+      console.error("Error saving plant", e);
     }
   };
 
@@ -1086,17 +1120,30 @@ export default function AdminDashboard() {
                               <td className="p-4">
                                 <div className="flex gap-2">
                                   <button onClick={() => {
+                                    setEditingPlantId(plant._id);
                                     setForm({
-                                      name: plant.name,
+                                      name: plant.name || '',
                                       scientificName: plant.scientificName || '',
-                                      price: String(plant.price),
-                                      stock: String(plant.stock),
-                                      category: plant.category,
+                                      price: String(plant.price || ''),
+                                      stock: String(plant.stock || ''),
+                                      category: plant.category || 'Indoor',
                                       description: plant.description || '',
-                                      imageFile: null
+                                      imageFile: null,
+                                      careLevel: plant.careLevel || 'Easy',
+                                      waterSchedule: plant.waterSchedule || plant.water || '',
+                                      sunlightReq: plant.sunlightReq || plant.sunlight || '',
+                                      fertilizerGuide: plant.fertilizerGuide || plant.fertilizer || '',
+                                      soilType: plant.soilType || plant.soil || '',
+                                      growthRate: plant.growthRate || '',
+                                      bloomingSeason: plant.bloomingSeason || '',
+                                      commonDiseases: plant.commonDiseases || plant.diseases || '',
+                                      diseaseTreatment: plant.diseaseTreatment || '',
+                                      careTips: plant.careTips || plant.growthTips || '',
+                                      seasonalCare: plant.seasonalCare || '',
+                                      benefits: plant.benefits || ''
                                     });
-                                    alert("Edit details loaded to the form on the right. Modify values and click Save Plant.");
-                                  }} className="grid h-9 w-9 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200"><Edit size={16} /></button>
+                                    alert("Edit details loaded to the form on the right. Modify values and click Update Plant.");
+                                  }} className="grid h-9 w-9 place-items-center rounded-full bg-leaf-100 text-leaf-900 hover:bg-leaf-200" title="Edit Plant"><Edit size={16} /></button>
                                   <button onClick={() => removePlant(plant._id)} className="grid h-9 w-9 place-items-center rounded-full bg-red-100 text-red-700 hover:bg-red-200"><Trash2 size={16} /></button>
                                 </div>
                               </td>
@@ -1109,23 +1156,120 @@ export default function AdminDashboard() {
 
                   <aside className="space-y-6">
                     <form onSubmit={addPlant} className="rounded-[1.5rem] md:rounded-[2.5rem] bg-white p-4 md:p-6 shadow-lg dark:bg-leaf-900/60 border border-leaf-700/5 text-left">
-                      <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white"><Plus /> Add New Plant</h2>
+                      <h2 className="mb-5 flex items-center gap-2 text-2xl font-extrabold text-leaf-900 dark:text-white">
+                        {editingPlantId ? <Edit size={22} /> : <Plus size={22} />} 
+                        {editingPlantId ? "Edit Plant Profile" : "Add New Plant"}
+                      </h2>
                       <div className="grid gap-3">
-                        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plant name *" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" required />
                         <input value={form.scientificName} onChange={(e) => setForm({ ...form, scientificName: e.target.value })} placeholder="Scientific name" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none">
-                          <option>Indoor</option><option>Outdoor</option><option>Flowering</option><option>Fruit</option><option>Medicinal</option><option>Farm</option>
-                        </select>
-                        <div className="grid grid-cols-2 gap-3">
-                          <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                          <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="Stock" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                        
+                        <div className="grid grid-cols-3 gap-2 items-center">
+                          <div className="flex flex-col gap-1 col-span-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Category</span>
+                            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none w-full">
+                              <option>Indoor</option><option>Outdoor</option><option>Flowering</option><option>Fruit</option><option>Medicinal</option><option>Farm</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Care Level</span>
+                            <select value={form.careLevel} onChange={(e) => setForm({ ...form, careLevel: e.target.value })} className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none w-full">
+                              <option>Easy</option>
+                              <option>Moderate</option>
+                              <option>Expert</option>
+                            </select>
+                          </div>
                         </div>
-                        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
-                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-leaf-700/40 px-4 py-6 font-bold text-leaf-700 dark:text-leaf-300">
-                          <Image size={18} /> {form.imageFile ? "Image Selected" : "Upload plant image"}
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Price (₹) *</span>
+                            <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" required />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Stock Qty *</span>
+                            <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="Stock" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" required />
+                          </div>
+                        </div>
+
+                        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" rows="2" />
+
+                        {/* Watering Schedule & Sunlight Requirements */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Watering Schedule</span>
+                            <input value={form.waterSchedule} onChange={(e) => setForm({ ...form, waterSchedule: e.target.value })} placeholder="e.g. Every 2-3 weeks" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Sunlight Requirement</span>
+                            <input value={form.sunlightReq} onChange={(e) => setForm({ ...form, sunlightReq: e.target.value })} placeholder="e.g. Bright indirect light" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                        </div>
+
+                        {/* Soil Type & Growth Rate */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Soil Type</span>
+                            <input value={form.soilType} onChange={(e) => setForm({ ...form, soilType: e.target.value })} placeholder="e.g. Clay, Sandy, Peat mix" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Growth Rate</span>
+                            <input value={form.growthRate} onChange={(e) => setForm({ ...form, growthRate: e.target.value })} placeholder="e.g. Fast, Moderate, Slow" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                        </div>
+
+                        {/* Blooming Season & Benefits */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Blooming Season</span>
+                            <input value={form.bloomingSeason} onChange={(e) => setForm({ ...form, bloomingSeason: e.target.value })} placeholder="e.g. Spring to Summer" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Plant Benefits</span>
+                            <input value={form.benefits} onChange={(e) => setForm({ ...form, benefits: e.target.value })} placeholder="e.g. Air purifying, Herbs" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                        </div>
+
+                        {/* Disease & Treatment */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Common Diseases</span>
+                            <input value={form.commonDiseases} onChange={(e) => setForm({ ...form, commonDiseases: e.target.value })} placeholder="e.g. Root rot, Aphids" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-leaf-900/40 dark:text-leaf-100/40 pl-1">Disease Treatment</span>
+                            <input value={form.diseaseTreatment} onChange={(e) => setForm({ ...form, diseaseTreatment: e.target.value })} placeholder="e.g. Neem oil spray" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" />
+                          </div>
+                        </div>
+
+                        {/* Care Tips & Seasonal Care */}
+                        <textarea value={form.careTips} onChange={(e) => setForm({ ...form, careTips: e.target.value })} placeholder="Care Tips & Advice" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" rows="2" />
+                        <textarea value={form.seasonalCare} onChange={(e) => setForm({ ...form, seasonalCare: e.target.value })} placeholder="Seasonal Care Instructions" className="rounded-xl border border-leaf-700/20 bg-transparent px-4 py-3 outline-none" rows="2" />
+
+                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-leaf-700/40 px-4 py-4 font-bold text-leaf-700 dark:text-leaf-300">
+                          <Image size={18} /> {form.imageFile ? "Image Selected" : (editingPlantId ? "Upload New Image (Optional)" : "Upload plant image")}
                           <input type="file" accept="image/*" className="hidden" onChange={(e) => setForm({...form, imageFile: e.target.files[0]})} />
                         </label>
-                        <button className="btn-primary"><Plus size={18} /> Save Plant</button>
+                        
+                        <div className="flex gap-2">
+                          <button className="btn-primary flex-1">{editingPlantId ? "Update Plant Profile" : "Save Plant"}</button>
+                          {editingPlantId && (
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setEditingPlantId(null);
+                                setForm({ 
+                                  name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null,
+                                  careLevel: 'Easy', waterSchedule: '', sunlightReq: '', fertilizerGuide: '', soilType: '', growthRate: '',
+                                  bloomingSeason: '', commonDiseases: '', diseaseTreatment: '', careTips: '', seasonalCare: '', benefits: ''
+                                });
+                              }} 
+                              className="btn-secondary"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </form>
                   </aside>
