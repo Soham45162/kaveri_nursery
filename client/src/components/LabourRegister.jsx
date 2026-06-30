@@ -5,7 +5,7 @@ import { db, storage } from '../config/firebase';
 import { 
   UserPlus, Trash2, Edit, DollarSign, History, X, Check, Printer, 
   Coins, FileText, Upload, Calendar, Award, MapPin, Phone, 
-  CreditCard, Eye, EyeOff, Search, FileSpreadsheet, Sparkles 
+  Search, FileSpreadsheet, Sparkles 
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
@@ -28,7 +28,6 @@ export default function LabourRegister() {
     name: '',
     skillType: 'Gardener',
     phone: '',
-    aadhaar: '',
     address: '',
     joiningDate: new Date().toISOString().slice(0, 10),
     salaryType: 'daily',
@@ -50,7 +49,6 @@ export default function LabourRegister() {
   const [customWageInput, setCustomWageInput] = useState(null); // { labourId, day, name, currentAmount, isNew }
   
   // Custom states for UI features
-  const [unmaskedAadhaarIds, setUnmaskedAadhaarIds] = useState({});
   const [expandedHistoryIds, setExpandedHistoryIds] = useState({});
 
   const year = currentDate.getFullYear();
@@ -108,11 +106,6 @@ export default function LabourRegister() {
       return;
     }
 
-    if (form.aadhaar && !/^\d{12}$/.test(form.aadhaar)) {
-      alert("Please enter a valid 12-digit Aadhaar number.");
-      return;
-    }
-
     setUploading(true);
     let uploadedPhotoUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'; // generic elegant profile
 
@@ -135,7 +128,6 @@ export default function LabourRegister() {
       role: form.skillType, // backward compatibility
       skillType: form.skillType,
       phone: form.phone,
-      aadhaar: form.aadhaar,
       address: form.address || '',
       joiningDate: joiningDateVal,
       salaryType: form.salaryType || 'daily',
@@ -158,7 +150,6 @@ export default function LabourRegister() {
         name: '',
         skillType: 'Gardener',
         phone: '',
-        aadhaar: '',
         address: '',
         joiningDate: new Date().toISOString().slice(0, 10),
         salaryType: 'daily',
@@ -185,11 +176,6 @@ export default function LabourRegister() {
 
     if (!/^\d{10}$/.test(editingLabour.phone)) {
       alert("Please enter a valid 10-digit mobile number.");
-      return;
-    }
-
-    if (editingLabour.aadhaar && !/^\d{12}$/.test(editingLabour.aadhaar)) {
-      alert("Please enter a valid 12-digit Aadhaar number.");
       return;
     }
 
@@ -231,7 +217,6 @@ export default function LabourRegister() {
         role: editingLabour.skillType, // backward compatibility
         skillType: editingLabour.skillType,
         phone: editingLabour.phone,
-        aadhaar: editingLabour.aadhaar,
         address: editingLabour.address || '',
         joiningDate: editingLabour.joiningDate || currentLabour?.joiningDate || '',
         salaryType: editingLabour.salaryType || 'daily',
@@ -547,20 +532,8 @@ export default function LabourRegister() {
   );
 
   // Mask Security helpers
-  const toggleAadhaarMask = (id) => {
-    setUnmaskedAadhaarIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const toggleHistoryExpansion = (id) => {
     setExpandedHistoryIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const getAadhaarDisplay = (id, number) => {
-    if (!number) return 'N/A';
-    if (unmaskedAadhaarIds[id]) {
-      return `${number.slice(0, 4)} ${number.slice(4, 8)} ${number.slice(8, 12)}`;
-    }
-    return `XXXX XXXX ${number.slice(8, 12)}`;
   };
 
   // Performance Rating Calculator
@@ -705,30 +678,17 @@ export default function LabourRegister() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
-                  <input 
-                    type="text" 
-                    maxLength="10"
-                    placeholder="10-digit number" 
-                    value={form.phone} 
-                    onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} 
-                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                    required 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. (Optional)</label>
-                  <input 
-                    type="text" 
-                    maxLength="12"
-                    placeholder="12-digit number" 
-                    value={form.aadhaar} 
-                    onChange={e => setForm({ ...form, aadhaar: e.target.value.replace(/\D/g, '') })} 
-                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                  />
-                </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
+                <input 
+                  type="text" 
+                  maxLength="10"
+                  placeholder="10-digit number" 
+                  value={form.phone} 
+                  onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  required 
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -824,21 +784,7 @@ export default function LabourRegister() {
                           <Phone size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0" />
                           <span>{labour.phone || 'No Mobile'}</span>
                         </div>
-                        <div className="flex items-center justify-between text-gray-600 dark:text-leaf-300">
-                          <div className="flex items-center gap-2">
-                            <CreditCard size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0" />
-                            <span>Aadhaar: {getAadhaarDisplay(labour.id, labour.aadhaar)}</span>
-                          </div>
-                          {labour.aadhaar && (
-                            <button 
-                              onClick={() => toggleAadhaarMask(labour.id)}
-                              className="text-xxs font-bold text-leaf-600 dark:text-leaf-300 hover:underline inline-flex items-center gap-0.5 shrink-0"
-                            >
-                              {unmaskedAadhaarIds[labour.id] ? <EyeOff size={10} /> : <Eye size={10} />}
-                              {unmaskedAadhaarIds[labour.id] ? 'Hide' : 'Reveal'}
-                            </button>
-                          )}
-                        </div>
+
                         <div className="flex items-start gap-2 text-gray-600 dark:text-leaf-300">
                           <MapPin size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0 mt-0.5" />
                           <span className="line-clamp-2 leading-relaxed">{labour.address || 'Address not listed'}</span>
@@ -1570,7 +1516,6 @@ export default function LabourRegister() {
                                   />
                                   <div>
                                     <strong className="text-gray-900 dark:text-leaf-100 block">{labour.name}</strong>
-                                    <span className="text-xxs text-gray-500 dark:text-leaf-300/60">Aadhaar: {labour.aadhaar ? `XXXX XXXX ${labour.aadhaar.slice(8,12)}` : 'N/A'}</span>
                                   </div>
                                 </div>
                               </td>
@@ -1705,28 +1650,16 @@ export default function LabourRegister() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
-                  <input 
-                    type="text" 
-                    maxLength="10"
-                    value={editingLabour.phone || ''} 
-                    onChange={e => setEditingLabour({ ...editingLabour, phone: e.target.value.replace(/\D/g, '') })} 
-                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                    required 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. (Optional)</label>
-                  <input 
-                    type="text" 
-                    maxLength="12"
-                    value={editingLabour.aadhaar || ''} 
-                    onChange={e => setEditingLabour({ ...editingLabour, aadhaar: e.target.value.replace(/\D/g, '') })} 
-                    className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                  />
-                </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Mobile *</label>
+                <input 
+                  type="text" 
+                  maxLength="10"
+                  value={editingLabour.phone || ''} 
+                  onChange={e => setEditingLabour({ ...editingLabour, phone: e.target.value.replace(/\D/g, '') })} 
+                  className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  required 
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
