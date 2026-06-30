@@ -263,50 +263,7 @@ export default function LabourRegister() {
     }
   };
 
-  // Attendance Toggle Statuses
-  const toggleStatus = async (labourId, day) => {
-    const labour = labours.find(l => l.id === labourId);
-    const currentStatus = attendance[labourId]?.[day];
-    let nextStatus;
-
-    if (!currentStatus) {
-      nextStatus = 'Full';
-    } else if (currentStatus === 'Full') {
-      nextStatus = 'Half';
-    } else if (currentStatus === 'Half') {
-      nextStatus = 'Absent';
-    } else if (currentStatus === 'Absent') {
-      nextStatus = 'Custom';
-    } else if (currentStatus === 'Custom') {
-      // Prompt to edit or clear
-      const defaultRate = attendance[labourId]?.[`${day}_amount`] || labour?.salaryRate || '';
-      const amountStr = prompt(`Enter new custom wage amount for ${labour?.name || 'worker'} on day ${day} (leave empty or click Cancel to clear attendance):`, defaultRate);
-      if (amountStr === null || amountStr.trim() === '') {
-        nextStatus = null; // Clear attendance
-      } else {
-        const amount = Number(amountStr);
-        if (isNaN(amount) || amount < 0) {
-          alert("Please enter a valid wage amount.");
-          return;
-        }
-        const newAttendance = {
-          ...attendance,
-          [labourId]: {
-            ...(attendance[labourId] || {}),
-            [`${day}_amount`]: amount
-          }
-        };
-        setAttendance(newAttendance);
-        try {
-          const docRef = doc(db, 'attendance', monthKey);
-          await setDoc(docRef, newAttendance, { merge: true });
-        } catch (err) {
-          console.error("Error updating custom wage amount in database:", err);
-        }
-        return;
-      }
-    }
-
+  const updateAttendanceStatus = async (labourId, day, status, amount = null) => {
     const newAttendance = {
       ...attendance,
       [labourId]: {
@@ -314,30 +271,16 @@ export default function LabourRegister() {
       }
     };
 
-    if (nextStatus === 'Custom') {
-      const defaultRate = labour?.salaryRate || '';
-      const amountStr = prompt(`Enter custom salary amount for ${labour?.name || 'worker'} on day ${day} (default daily rate is ₹${defaultRate}):`, defaultRate);
-      if (amountStr === null || amountStr.trim() === '') {
-        nextStatus = null; // Clear/Cancel
-      } else {
-        const amount = Number(amountStr);
-        if (isNaN(amount) || amount < 0) {
-          alert("Please enter a valid salary amount.");
-          return;
-        }
-        newAttendance[labourId][day] = 'Custom';
+    if (status) {
+      newAttendance[labourId][day] = status;
+      if (status === 'Custom' && amount !== null) {
         newAttendance[labourId][`${day}_amount`] = amount;
-      }
-    }
-
-    if (nextStatus !== 'Custom') {
-      if (nextStatus) {
-        newAttendance[labourId][day] = nextStatus;
-        delete newAttendance[labourId][`${day}_amount`];
       } else {
-        delete newAttendance[labourId][day];
         delete newAttendance[labourId][`${day}_amount`];
       }
+    } else {
+      delete newAttendance[labourId][day];
+      delete newAttendance[labourId][`${day}_amount`];
     }
 
     setAttendance(newAttendance);
@@ -349,6 +292,27 @@ export default function LabourRegister() {
       console.error("Error updating attendance state in database:", err);
     }
   };
+
+  // Attendance Toggle Statuses
+  const toggleStatus = async (labourId, day) => {
+    const labour = labours.find(l => l.id === labourId);
+    const currentStatus = attendance[labourId]?.[day];
+
+    if (!currentStatus) {
+      await updateAttendanceStatus(labourId, day, 'Full');
+    } else if (currentStatus === 'Full') {
+      await updateAttendanceStatus(labourId, day, 'Half');
+    } else if (currentStatus === 'Half') {
+      await updateAttendanceStatus(labourId, day, 'Absent');
+    } else if (currentStatus === 'Absent') {
+      const currentAmount = attendance[labourId]?.[`${day}_amount`] || labour?.salaryRate || '';
+      setCustomWageInput({ labourId, day, name: labour?.name, currentAmount, isNew: true });
+    } else if (currentStatus === 'Custom') {
+      const currentAmount = attendance[labourId]?.[`${day}_amount`] || labour?.salaryRate || '';
+      setCustomWageInput({ labourId, day, name: labour?.name, currentAmount, isNew: false });
+    }
+  };
+
 
 
   // Salary Payments and Advances Record Triggers
@@ -1805,6 +1769,64 @@ export default function LabourRegister() {
                 >
                   {uploading ? 'Saving...' : 'Save Changes'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Daily Wage Modal Overlay */}
+      {customWageInput && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl dark:bg-leaf-900 border border-leaf-700/10 text-left text-leaf-900 dark:text-leaf-100">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-extrabold flex items-center gap-2 text-purple-650 dark:text-purple-400">
+                <DollarSign size={20} /> {customWageInput.isNew ? "Enter Custom Daily Wage" : "Edit Custom Daily Wage"}
+              </h3>
+              <button onClick={() => setCustomWageInput(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-leaf-800 rounded-full"><X size={20} /></button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-leaf-300/80 mb-4">Set custom wage for <strong>{customWageInput.name}</strong> on day <strong>{customWageInput.day}</strong>.</p>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const amount = Number(customWageInput.currentAmount);
+              if (isNaN(amount) || amount < 0) {
+                alert("Please enter a valid wage amount.");
+                return;
+              }
+              await updateAttendanceStatus(customWageInput.labourId, customWageInput.day, 'Custom', amount);
+              setCustomWageInput(null);
+            }} className="space-y-4">
+              <div className="grid gap-2">
+                <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Wage Amount (₹)</label>
+                <input 
+                  type="number" 
+                  value={customWageInput.currentAmount} 
+                  onChange={e => setCustomWageInput({ ...customWageInput, currentAmount: e.target.value })} 
+                  className="rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
+                  placeholder="Enter amount" 
+                  required 
+                />
+              </div>
+              <div className="mt-6 flex justify-between border-t pt-4">
+                <div>
+                  {!customWageInput.isNew && (
+                    <button 
+                      type="button" 
+                      onClick={async () => {
+                        await updateAttendanceStatus(customWageInput.labourId, customWageInput.day, null);
+                        setCustomWageInput(null);
+                      }} 
+                      className="px-4 py-2 text-xs font-bold rounded-xl border border-red-500/20 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition"
+                    >
+                      Clear Status
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setCustomWageInput(null)} className="btn-secondary text-xs font-bold px-4 py-2">Cancel</button>
+                  <button type="submit" className="btn-primary bg-purple-650 hover:bg-purple-750 border-none text-xs font-bold px-4 py-2 text-white">Save Wage</button>
+                </div>
               </div>
             </form>
           </div>
