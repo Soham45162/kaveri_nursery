@@ -98,7 +98,7 @@ export default function LabourRegister() {
   // Create Labourer (Add worker)
   const addLabour = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.phone || !form.aadhaar || !form.salaryRate) {
+    if (!form.name || !form.phone || !form.salaryRate) {
       alert("Please fill in all required fields.");
       return;
     }
@@ -108,7 +108,7 @@ export default function LabourRegister() {
       return;
     }
 
-    if (!/^\d{12}$/.test(form.aadhaar)) {
+    if (form.aadhaar && !/^\d{12}$/.test(form.aadhaar)) {
       alert("Please enter a valid 12-digit Aadhaar number.");
       return;
     }
@@ -178,7 +178,7 @@ export default function LabourRegister() {
   // Update Labourer (Edit worker)
   const updateLabour = async (e) => {
     e.preventDefault();
-    if (!editingLabour || !editingLabour.name || !editingLabour.phone || !editingLabour.aadhaar || !editingLabour.salaryRate) {
+    if (!editingLabour || !editingLabour.name || !editingLabour.phone || !editingLabour.salaryRate) {
       alert("Please fill in all required fields.");
       return;
     }
@@ -188,7 +188,7 @@ export default function LabourRegister() {
       return;
     }
 
-    if (!/^\d{12}$/.test(editingLabour.aadhaar)) {
+    if (editingLabour.aadhaar && !/^\d{12}$/.test(editingLabour.aadhaar)) {
       alert("Please enter a valid 12-digit Aadhaar number.");
       return;
     }
@@ -719,7 +719,7 @@ export default function LabourRegister() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. *</label>
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. (Optional)</label>
                   <input 
                     type="text" 
                     maxLength="12"
@@ -727,7 +727,6 @@ export default function LabourRegister() {
                     value={form.aadhaar} 
                     onChange={e => setForm({ ...form, aadhaar: e.target.value.replace(/\D/g, '') })} 
                     className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                    required 
                   />
                 </div>
               </div>
@@ -830,13 +829,15 @@ export default function LabourRegister() {
                             <CreditCard size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0" />
                             <span>Aadhaar: {getAadhaarDisplay(labour.id, labour.aadhaar)}</span>
                           </div>
-                          <button 
-                            onClick={() => toggleAadhaarMask(labour.id)}
-                            className="text-xxs font-bold text-leaf-600 dark:text-leaf-300 hover:underline inline-flex items-center gap-0.5 shrink-0"
-                          >
-                            {unmaskedAadhaarIds[labour.id] ? <EyeOff size={10} /> : <Eye size={10} />}
-                            {unmaskedAadhaarIds[labour.id] ? 'Hide' : 'Reveal'}
-                          </button>
+                          {labour.aadhaar && (
+                            <button 
+                              onClick={() => toggleAadhaarMask(labour.id)}
+                              className="text-xxs font-bold text-leaf-600 dark:text-leaf-300 hover:underline inline-flex items-center gap-0.5 shrink-0"
+                            >
+                              {unmaskedAadhaarIds[labour.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                              {unmaskedAadhaarIds[labour.id] ? 'Hide' : 'Reveal'}
+                            </button>
+                          )}
                         </div>
                         <div className="flex items-start gap-2 text-gray-600 dark:text-leaf-300">
                           <MapPin size={13} className="text-leaf-600 dark:text-leaf-300 shrink-0 mt-0.5" />
@@ -1717,14 +1718,13 @@ export default function LabourRegister() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. *</label>
+                  <label className="text-xs font-bold text-leaf-700 dark:text-leaf-300 uppercase">Aadhaar No. (Optional)</label>
                   <input 
                     type="text" 
                     maxLength="12"
                     value={editingLabour.aadhaar || ''} 
                     onChange={e => setEditingLabour({ ...editingLabour, aadhaar: e.target.value.replace(/\D/g, '') })} 
                     className="w-full rounded-xl border border-leaf-700/20 bg-cream/20 px-4 py-2 outline-none text-leaf-900 dark:text-leaf-100 dark:bg-leaf-900 focus:ring-2 focus:ring-leaf-500 text-sm" 
-                    required 
                   />
                 </div>
               </div>
