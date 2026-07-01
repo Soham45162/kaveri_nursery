@@ -100,9 +100,17 @@ export default function AdminDashboard() {
 
     let imageUrl = form.imageFile ? '' : (editingPlantId ? inventory.find(p => p._id === editingPlantId)?.image : 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80');
     if (form.imageFile) {
-       const imageRef = ref(storage, `plants/${Date.now()}`);
-       await uploadBytes(imageRef, form.imageFile);
-       imageUrl = await getDownloadURL(imageRef);
+       try {
+         const imageRef = ref(storage, `plants/${Date.now()}`);
+         await uploadBytes(imageRef, form.imageFile);
+         imageUrl = await getDownloadURL(imageRef);
+       } catch (err) {
+         console.error("Error uploading plant photo:", err);
+         alert("Photo upload failed. Keeping existing image or using default placeholder. Please make sure Firebase Storage is enabled in your Firebase Console.");
+         imageUrl = editingPlantId 
+           ? (inventory.find(p => p._id === editingPlantId)?.image || 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80') 
+           : 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80';
+       }
     }
 
     const plantData = {
@@ -481,24 +489,39 @@ export default function AdminDashboard() {
 
     try {
       if (projectForm.beforeFile) {
-        const beforeRef = ref(storage, `gallery/before-${Date.now()}`);
-        await uploadBytes(beforeRef, projectForm.beforeFile);
-        beforeUrl = await getDownloadURL(beforeRef);
+        try {
+          const beforeRef = ref(storage, `gallery/before-${Date.now()}`);
+          await uploadBytes(beforeRef, projectForm.beforeFile);
+          beforeUrl = await getDownloadURL(beforeRef);
+        } catch (uploadErr) {
+          console.error("Before image upload failed:", uploadErr);
+          alert("Before image upload failed. Using placeholder instead.");
+        }
       }
       if (projectForm.afterFile) {
-        const afterRef = ref(storage, `gallery/after-${Date.now()}`);
-        await uploadBytes(afterRef, projectForm.afterFile);
-        afterUrl = await getDownloadURL(afterRef);
+        try {
+          const afterRef = ref(storage, `gallery/after-${Date.now()}`);
+          await uploadBytes(afterRef, projectForm.afterFile);
+          afterUrl = await getDownloadURL(afterRef);
+        } catch (uploadErr) {
+          console.error("After image upload failed:", uploadErr);
+          alert("After image upload failed. Using placeholder instead.");
+        }
       }
 
       const uploadedAdditionalUrls = [];
       if (projectForm.additionalImageFiles && projectForm.additionalImageFiles.length > 0) {
         for (let i = 0; i < projectForm.additionalImageFiles.length; i++) {
           const file = projectForm.additionalImageFiles[i];
-          const imgRef = ref(storage, `gallery/additional-${Date.now()}-${i}`);
-          await uploadBytes(imgRef, file);
-          const url = await getDownloadURL(imgRef);
-          uploadedAdditionalUrls.push(url);
+          try {
+            const imgRef = ref(storage, `gallery/additional-${Date.now()}-${i}`);
+            await uploadBytes(imgRef, file);
+            const url = await getDownloadURL(imgRef);
+            uploadedAdditionalUrls.push(url);
+          } catch (uploadErr) {
+            console.error("Additional image upload failed:", uploadErr);
+            alert(`Additional image ${i+1} upload failed. Skipping this image.`);
+          }
         }
       }
 
