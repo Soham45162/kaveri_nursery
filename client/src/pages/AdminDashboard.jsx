@@ -4,10 +4,8 @@ import {
   Coins, DollarSign, TrendingUp, Calendar, AlertTriangle
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
-import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import api from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { db, storage } from '../config/firebase.js';
 import LabourRegister from '../components/LabourRegister.jsx';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -98,62 +96,47 @@ export default function AdminDashboard() {
     event.preventDefault();
     if (!form.name || !form.price || !form.stock) return;
 
-    let imageUrl = form.imageFile ? '' : (editingPlantId ? inventory.find(p => p._id === editingPlantId)?.image : 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80');
-    if (form.imageFile) {
-       try {
-         const imageRef = ref(storage, `plants/${Date.now()}`);
-         await uploadBytes(imageRef, form.imageFile);
-         imageUrl = await getDownloadURL(imageRef);
-       } catch (err) {
-         console.error("Error uploading plant photo:", err);
-         alert("Photo upload failed. Keeping existing image or using default placeholder. Please make sure Firebase Storage is enabled in your Firebase Console.");
-         imageUrl = editingPlantId 
-           ? (inventory.find(p => p._id === editingPlantId)?.image || 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80') 
-           : 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80';
-       }
-    }
-
-    const plantData = {
-      name: form.name,
-      scientificName: form.scientificName || 'Add scientific name',
-      category: form.category || 'Indoor',
-      price: Number(form.price),
-      stock: Number(form.stock),
-      description: form.description || '',
-      discount: editingPlantId ? (inventory.find(p => p._id === editingPlantId)?.discount || 0) : 0,
-      image: imageUrl,
-      careLevel: form.careLevel || 'Easy',
-      waterSchedule: form.waterSchedule || '',
-      sunlightReq: form.sunlightReq || '',
-      fertilizerGuide: form.fertilizerGuide || '',
-      soilType: form.soilType || '',
-      growthRate: form.growthRate || '',
-      bloomingSeason: form.bloomingSeason || '',
-      commonDiseases: form.commonDiseases || '',
-      diseaseTreatment: form.diseaseTreatment || '',
-      careTips: form.careTips || '',
-      seasonalCare: form.seasonalCare || '',
-      benefits: form.benefits || '',
-      water: form.waterSchedule || 'Moderate',
-      sunlight: form.sunlightReq || 'Indirect light',
-      soil: form.soilType || 'Well-drained soil',
-      temperature: '18-32°C',
-      growthTips: form.careTips || 'Update growth tips from plant management.',
-      fertilizer: form.fertilizerGuide || 'Update fertilizer tips.',
-      diseases: form.commonDiseases || 'Update disease info.'
-    };
-
     try {
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('scientificName', form.scientificName || 'Add scientific name');
+      formData.append('category', form.category || 'Indoor');
+      formData.append('price', form.price);
+      formData.append('stock', form.stock);
+      formData.append('description', form.description || '');
+      formData.append('careLevel', form.careLevel || 'Easy');
+      formData.append('waterSchedule', form.waterSchedule || '');
+      formData.append('sunlightReq', form.sunlightReq || '');
+      formData.append('fertilizerGuide', form.fertilizerGuide || '');
+      formData.append('soilType', form.soilType || '');
+      formData.append('growthRate', form.growthRate || '');
+      formData.append('bloomingSeason', form.bloomingSeason || '');
+      formData.append('temperature', form.temperature || '18-32°C');
+      formData.append('commonDiseases', form.commonDiseases || '');
+      formData.append('diseaseTreatment', form.diseaseTreatment || '');
+      formData.append('careTips', form.careTips || '');
+      formData.append('seasonalCare', form.seasonalCare || '');
+      formData.append('benefits', form.benefits || '');
+
+      if (form.imageFile) {
+        formData.append('imageFile', form.imageFile);
+      }
+
       if (editingPlantId) {
-        await updateDoc(doc(db, 'plants', editingPlantId), plantData);
-        setInventory(current => current.map(p => p._id === editingPlantId ? { ...p, ...plantData } : p));
+        const res = await api.put(`/plants/${editingPlantId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setInventory(current => current.map(p => p._id === editingPlantId ? res.data : p));
         setEditingPlantId(null);
         alert("Plant updated successfully!");
       } else {
-        const docRef = await addDoc(collection(db, 'plants'), plantData);
-        setInventory([{ _id: docRef.id, ...plantData }, ...inventory]);
+        const res = await api.post('/plants', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setInventory([res.data, ...inventory]);
         alert("Plant added successfully!");
       }
+
       setForm({ 
         name: '', scientificName: '', price: '', stock: '', category: 'Indoor', description: '', imageFile: null,
         careLevel: 'Easy', waterSchedule: '', sunlightReq: '', fertilizerGuide: '', soilType: '', growthRate: '',
@@ -161,80 +144,62 @@ export default function AdminDashboard() {
       });
     } catch (e) {
       console.error("Error saving plant", e);
+      alert("Error saving plant: " + (e.response?.data?.error || e.message));
     }
   };
 
   const removePlant = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this plant?")) return;
     try {
-      await deleteDoc(doc(db, 'plants', id));
-      setInventory(current => current.filter(p => p._id !== id));
+      await api.delete(`/plants/${id}`);
+      setInventory(current => current.filter(p => p._id !== id && p.id !== id));
     } catch (e) {
       console.error(e);
+      alert("Error deleting plant: " + (e.response?.data?.error || e.message));
     }
   };
 
   useEffect(() => {
     async function loadData() {
       try {
-        const projSnap = await getDocs(collection(db, 'gallery'));
-        if (!projSnap.empty) setManagedProjects(projSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).map(apiProjectToUi));
-
-        const plantSnap = await getDocs(collection(db, 'plants'));
-        if (!plantSnap.empty) setInventory(plantSnap.docs.map(docSnap => ({ _id: docSnap.id, ...docSnap.data() })));
-
-        const revSnap = await getDocs(collection(db, 'reviews'));
-        if (!revSnap.empty) setAdminReviews(revSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
-        
-        const billSnap = await getDocs(collection(db, 'bills'));
-        if (!billSnap.empty) setBills(billSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
-
-        const visitorSnap = await getDoc(doc(db, 'stats', 'visitors'));
-        if (visitorSnap.exists()) {
-          setVisitorsCount(visitorSnap.data().count || 0);
-        }
-
-        const labSnap = await getDocs(collection(db, 'labours'));
-        const laboursData = labSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        setLabours(laboursData);
-        setLaboursCount(laboursData.length);
-
         const year = currentAnalyticsDate.getFullYear();
         const month = currentAnalyticsDate.getMonth();
         const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-        try {
-          const attSnap = await getDoc(doc(db, 'attendance', monthKey));
-          if (attSnap.exists()) setAttendance(attSnap.data());
-          else setAttendance({});
-        } catch (e) { console.error("Error fetching attendance:", e); }
+        const [projRes, plantRes, revRes, billRes, statRes, labRes, attRes, payRes, advRes, setRes] = await Promise.all([
+          api.get('/projects').catch(() => ({ data: [] })),
+          api.get('/plants').catch(() => ({ data: [] })),
+          api.get('/reviews').catch(() => ({ data: [] })),
+          api.get('/bills').catch(() => ({ data: [] })),
+          api.get('/stats/visitors').catch(() => ({ data: { count: 0 } })),
+          api.get('/labours').catch(() => ({ data: [] })),
+          api.get(`/attendance?month=${monthKey}`).catch(() => ({ data: {} })),
+          api.get(`/payments?month=${monthKey}`).catch(() => ({ data: {} })),
+          api.get(`/advances?month=${monthKey}`).catch(() => ({ data: {} })),
+          api.get('/settings/billing').catch(() => ({ data: {} }))
+        ]);
 
-        try {
-          const paySnap = await getDoc(doc(db, 'payments', monthKey));
-          if (paySnap.exists()) setPayments(paySnap.data());
-          else setPayments({});
-        } catch (e) { console.error("Error fetching payments:", e); }
-
-        try {
-          const advSnap = await getDoc(doc(db, 'advances', monthKey));
-          if (advSnap.exists()) setAdvances(advSnap.data());
-          else setAdvances({});
-        } catch (e) { console.error("Error fetching advances:", e); }
-
-        try {
-          const settingsSnap = await getDoc(doc(db, 'settings', 'billing'));
-          if (settingsSnap.exists()) {
-            const sData = settingsSnap.data();
-            if (sData.letterheadType) {
-              setLetterheadType(sData.letterheadType);
-              localStorage.setItem('letterheadType', sData.letterheadType);
-            }
-            if (sData.customLetterheadUrl) {
-              setCustomLetterheadUrl(sData.customLetterheadUrl);
-              localStorage.setItem('customLetterheadUrl', sData.customLetterheadUrl);
-            }
+        if (projRes.data) setManagedProjects(projRes.data);
+        if (plantRes.data) setInventory(plantRes.data);
+        if (revRes.data) setAdminReviews(revRes.data);
+        if (billRes.data) setBills(billRes.data);
+        if (statRes.data) setVisitorsCount(statRes.data.count || 0);
+        if (labRes.data) {
+          setLabours(labRes.data);
+          setLaboursCount(labRes.data.length);
+        }
+        if (attRes.data) setAttendance(attRes.data);
+        if (payRes.data) setPayments(payRes.data);
+        if (advRes.data) setAdvances(advRes.data);
+        if (setRes.data) {
+          if (setRes.data.letterheadType) {
+            setLetterheadType(setRes.data.letterheadType);
+            localStorage.setItem('letterheadType', setRes.data.letterheadType);
           }
-        } catch (err) {
-          console.warn("Failed to fetch settings from Firestore, using local fallback", err);
+          if (setRes.data.customLetterheadUrl) {
+            setCustomLetterheadUrl(setRes.data.customLetterheadUrl);
+            localStorage.setItem('customLetterheadUrl', setRes.data.customLetterheadUrl);
+          }
         }
       } catch (error) {
         console.error("Error loading admin data", error);
@@ -456,18 +421,26 @@ export default function AdminDashboard() {
     );
   }, [inventory, plantFilterQuery]);
 
+
   const approveReview = async (id) => {
     try {
-      await updateDoc(doc(db, 'reviews', id), { approved: true });
-      setAdminReviews(current => current.map(r => r.id === id ? { ...r, approved: true } : r));
-    } catch (e) { console.error(e); }
+      await api.put(`/reviews/${id}/approve`);
+      setAdminReviews(current => current.map(r => (r.id === id || r._id === id) ? { ...r, approved: true } : r));
+    } catch (e) {
+      console.error(e);
+      alert("Error approving review: " + (e.response?.data?.error || e.message));
+    }
   };
 
   const deleteReview = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this review?")) return;
     try {
-      await deleteDoc(doc(db, 'reviews', id));
-      setAdminReviews(current => current.filter(r => r.id !== id));
-    } catch (e) { console.error(e); }
+      await api.delete(`/reviews/${id}`);
+      setAdminReviews(current => current.filter(r => r.id !== id && r._id !== id));
+    } catch (e) {
+      console.error(e);
+      alert("Error deleting review: " + (e.response?.data?.error || e.message));
+    }
   };
 
   const addOrUpdateProject = async (event) => {
@@ -484,84 +457,48 @@ export default function AdminDashboard() {
 
     setIsSavingProject(true);
 
-    let beforeUrl = projectForm.before || 'https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=900&q=80';
-    let afterUrl = projectForm.after || 'https://images.unsplash.com/photo-1558904541-efa8c3a30fc9?auto=format&fit=crop&w=900&q=80';
-
     try {
+      const formData = new FormData();
+      formData.append('title', projectForm.title);
+      formData.append('category', projectForm.category || 'Garden Design');
+      formData.append('location', projectForm.location || '');
+      formData.append('duration', projectForm.duration || '');
+      formData.append('scope', projectForm.scope || '');
+      formData.append('result', projectForm.result || '');
+      formData.append('plantsUsed', JSON.stringify(projectForm.plantsUsed || []));
+
       if (projectForm.beforeFile) {
-        try {
-          const beforeRef = ref(storage, `gallery/before-${Date.now()}`);
-          await uploadBytes(beforeRef, projectForm.beforeFile);
-          beforeUrl = await getDownloadURL(beforeRef);
-        } catch (uploadErr) {
-          console.error("Before image upload failed:", uploadErr);
-          alert("Before image upload failed. Using placeholder instead.");
-        }
+        formData.append('beforeFile', projectForm.beforeFile);
       }
       if (projectForm.afterFile) {
-        try {
-          const afterRef = ref(storage, `gallery/after-${Date.now()}`);
-          await uploadBytes(afterRef, projectForm.afterFile);
-          afterUrl = await getDownloadURL(afterRef);
-        } catch (uploadErr) {
-          console.error("After image upload failed:", uploadErr);
-          alert("After image upload failed. Using placeholder instead.");
-        }
+        formData.append('afterFile', projectForm.afterFile);
       }
-
-      const uploadedAdditionalUrls = [];
       if (projectForm.additionalImageFiles && projectForm.additionalImageFiles.length > 0) {
-        for (let i = 0; i < projectForm.additionalImageFiles.length; i++) {
-          const file = projectForm.additionalImageFiles[i];
-          try {
-            const imgRef = ref(storage, `gallery/additional-${Date.now()}-${i}`);
-            await uploadBytes(imgRef, file);
-            const url = await getDownloadURL(imgRef);
-            uploadedAdditionalUrls.push(url);
-          } catch (uploadErr) {
-            console.error("Additional image upload failed:", uploadErr);
-            alert(`Additional image ${i+1} upload failed. Skipping this image.`);
-          }
+        for (const file of projectForm.additionalImageFiles) {
+          formData.append('additionalFiles', file);
         }
       }
 
-      const projectData = {
-        title: projectForm.title,
-        category: projectForm.category,
-        location: projectForm.location,
-        duration: projectForm.duration,
-        scope: projectForm.scope,
-        plantsUsed: projectForm.plantsUsed || [],
-        result: projectForm.result || 'Successfully completed landscaping project.',
-        beforeImage: beforeUrl,
-        afterImage: afterUrl,
-        description: projectForm.result || 'Successfully completed landscaping project.',
-        additionalImages: [...(projectForm.additionalImages || []), ...uploadedAdditionalUrls]
-      };
-
-      let savedId = editingProjectId;
+      let res;
       if (editingProjectId) {
-        await updateDoc(doc(db, 'gallery', editingProjectId), projectData);
+        res = await api.put(`/projects/${editingProjectId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setManagedProjects((current) => current.map((p) => (p.id === editingProjectId || p._id === editingProjectId ? res.data : p)));
+        alert("Project updated successfully!");
       } else {
-        const docRef = await addDoc(collection(db, 'gallery'), projectData);
-        savedId = docRef.id;
+        res = await api.post('/projects', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setManagedProjects((current) => [res.data, ...current]);
+        alert("Project added successfully!");
       }
-      
-      const savedProject = apiProjectToUi({ _id: savedId, ...projectData });
-      setManagedProjects((current) => {
-        if (editingProjectId) {
-          return current.map((project) => (project.id === editingProjectId ? savedProject : project));
-        }
-        return [savedProject, ...current];
-      });
-
-      alert(editingProjectId ? "Project updated successfully!" : "Project added successfully!");
 
       setEditingProjectId(null);
       setProjectForm(emptyProjectForm);
     } catch (error) {
       console.error("Error saving project", error);
-      alert("Error saving project: " + error.message);
+      alert("Error saving project: " + (error.response?.data?.error || error.message));
     } finally {
       setIsSavingProject(false);
     }
@@ -587,15 +524,18 @@ export default function AdminDashboard() {
   };
 
   const removeProject = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
     try {
-      await deleteDoc(doc(db, 'gallery', id));
+      await api.delete(`/projects/${id}`);
+      setManagedProjects((current) => current.filter((project) => project.id !== id && project._id !== id));
+      if (editingProjectId === id) {
+        setEditingProjectId(null);
+        setProjectForm(emptyProjectForm);
+      }
+      alert("Project deleted successfully!");
     } catch (error) {
-      // Local fallback keeps the UI responsive in demo mode.
-    }
-    setManagedProjects((current) => current.filter((project) => project.id !== id));
-    if (editingProjectId === id) {
-      setEditingProjectId(null);
-      setProjectForm(emptyProjectForm);
+      console.error("Error deleting project", error);
+      alert("Error deleting project: " + (error.response?.data?.error || error.message));
     }
   };
 
@@ -677,29 +617,34 @@ export default function AdminDashboard() {
 
   const saveBill = async (event) => {
     event.preventDefault();
-    if (!billForm.customerName || billForm.lines.some((line) => !line.plantName)) return;
-    const billData = {
-      ...billForm,
-      number: `${billForm.type === 'Bill' ? 'BILL' : 'QT'}-${String(bills.length + 1).padStart(4, '0')}`,
-      total: billTotal,
-      createdAt: new Date().toLocaleString()
-    };
+    if (!billForm.customerName || billForm.lines.some((line) => !line.plantName)) {
+      alert("Please enter customer name and at least one plant item.");
+      return;
+    }
+    
     try {
-      const docRef = await addDoc(collection(db, 'bills'), billData);
-      const savedBill = { id: docRef.id, ...billData };
+      const res = await api.post('/bills', billForm);
+      const savedBill = res.data;
       setBills((current) => [savedBill, ...current]);
       setBillForm(emptyBillForm);
       setPreviewBill(savedBill);
+      alert("Bill/Quotation saved successfully!");
     } catch (e) {
       console.error(e);
+      alert("Error saving bill: " + (e.response?.data?.error || e.message));
     }
   };
 
   const deleteBill = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this bill?")) return;
     try {
-      await deleteDoc(doc(db, 'bills', id));
-      setBills(current => current.filter(b => b.id !== id));
-    } catch (e) { console.error(e); }
+      await api.delete(`/bills/${id}`);
+      setBills(current => current.filter(b => b.id !== id && b._id !== id));
+      alert("Bill deleted successfully!");
+    } catch (e) {
+      console.error(e);
+      alert("Error deleting bill: " + (e.response?.data?.error || e.message));
+    }
   };
 
   const currentMonth = new Date().getMonth();
@@ -718,12 +663,9 @@ export default function AdminDashboard() {
     setLetterheadType(type);
     localStorage.setItem('letterheadType', type);
     try {
-      await setDoc(doc(db, 'settings', 'billing'), {
-        letterheadType: type,
-        customLetterheadUrl: url
-      }, { merge: true });
+      await api.put('/settings/billing', { letterheadType: type });
     } catch (e) {
-      console.error("Error saving settings to Firestore", e);
+      console.error("Error saving settings to PostgreSQL", e);
     }
   };
 
@@ -732,14 +674,22 @@ export default function AdminDashboard() {
     if (!file) return;
     setUploadingLetterhead(true);
     try {
-      const storageRef = ref(storage, `settings/letterhead-${Date.now()}`);
-      await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(storageRef);
-      setCustomLetterheadUrl(downloadUrl);
-      localStorage.setItem('customLetterheadUrl', downloadUrl);
-      await saveLetterheadSettings(letterheadType, downloadUrl);
+      const formData = new FormData();
+      formData.append('letterheadFile', file);
+      formData.append('letterheadType', letterheadType);
+
+      const res = await api.put('/settings/billing', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.customLetterheadUrl) {
+        setCustomLetterheadUrl(res.data.customLetterheadUrl);
+        localStorage.setItem('customLetterheadUrl', res.data.customLetterheadUrl);
+      }
+      alert("Letterhead banner uploaded successfully!");
     } catch (error) {
       console.error("Error uploading letterhead image", error);
+      alert("Failed to upload letterhead banner: " + (error.response?.data?.error || error.message));
     } finally {
       setUploadingLetterhead(false);
     }

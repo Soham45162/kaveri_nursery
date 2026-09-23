@@ -5,26 +5,25 @@ A complete modern, responsive, professional nursery management website built for
 ## Tech Stack
 
 *   **Frontend:** React (Vite), Tailwind CSS, Framer Motion (animations), Lucide React (icons), React Router (navigation)
-*   **Backend as a Service:** Firebase
-    *   **Firestore:** Real-time NoSQL database for plants, projects, reviews, and bills.
-    *   **Firebase Storage:** Secure cloud storage for uploading plant and project images.
-    *   **Firebase Authentication:** Secure email/password login restricted to the admin owner.
-*   **Deployment:** Netlify
+*   **Frontend:** React (Vite), Tailwind CSS, Framer Motion (animations), Lucide React (icons), React Router (navigation)
+*   **Backend Server:** Node.js, Express, Multer, JWT, BcryptJS
+*   **Database & Media Storage:** PostgreSQL 18 (`pg` pool, binary `BYTEA` image storage, UUID PKs, foreign keys, constraints)
 
 ## Key Features
 
 ### 1. Public Website
 *   **Modern Design:** Green, earthy, fresh colors with glassmorphism and subtle scrolling animations.
-*   **Dynamic Plant Store:** Live inventory of plants synced directly from Firestore.
-*   **Past Projects Gallery:** Showcases landscaping and garden design work.
-*   **Customer Reviews:** Visitors can submit reviews and photos (which require admin approval to appear live).
+*   **Dynamic Plant Store:** Live inventory of plants served via PostgreSQL API and streamed BYTEA images.
+*   **Past Projects Gallery:** Showcases landscaping and garden design work with multi-image carousels and plant tags.
+*   **Customer Reviews:** Visitors can submit reviews and photos (moderated via Admin review approval).
 
-### 2. Admin Dashboard (Protected)
-*   **Authentication:** Only accessible via the authorized admin email.
-*   **Inventory Management:** Add, update, and delete plant records. Upload plant photos directly to Firebase Storage.
-*   **Project Management:** Manage past work and landscaping projects displayed on the homepage.
-*   **Review Management:** Approve or delete user-submitted reviews.
-*   **Billing & Quotation System:** Generate and save invoices/quotations for customers dynamically.
+### 2. Admin Dashboard (Protected via JWT)
+*   **Authentication:** Secure bcrypt password verification with JWT token authorization (Admin & Customer roles).
+*   **Inventory Management:** Add, update, and delete plant records with BYTEA binary image uploads and stock management.
+*   **Project Management:** Manage landscaping gallery projects with before/after photos and linked plants.
+*   **Review Management:** Approve or delete user-submitted reviews and review photos.
+*   **Billing & Invoicing System:** Generate, save, print, and download professional GST invoices/quotations with custom letterhead headers.
+*   **Labour Register & Ledger:** Complete worker directory, wage rates, daily attendance tracking, wage history, salary payments, and cash advance records.
 
 ## Local Setup Instructions
 
@@ -34,30 +33,30 @@ A complete modern, responsive, professional nursery management website built for
     cd kaveri_nursery
     ```
 
-2.  **Navigate to the client directory:**
+2.  **Database Setup (PostgreSQL 18):**
+    Ensure PostgreSQL 18 is running and create database `kaveri_nursery`:
+    ```bash
+    cd server
+    npm install
+    # Apply schema and initial admin seed
+    npm run migrate
+    npm run seed
+    ```
+
+3.  **Start the Backend API Server:**
+    ```bash
+    cd server
+    npm run dev
+    # Backend runs on http://localhost:5000
+    ```
+
+4.  **Start the Frontend Client:**
     ```bash
     cd client
-    ```
-
-3.  **Install dependencies:**
-    ```bash
     npm install
-    ```
-
-4.  **Set up Environment Variables:**
-    Create a `.env` file inside the `/client` directory and add your Firebase configuration:
-    ```env
-    VITE_FIREBASE_API_KEY="your-api-key"
-    VITE_FIREBASE_AUTH_DOMAIN="your-auth-domain"
-    VITE_FIREBASE_PROJECT_ID="your-project-id"
-    VITE_FIREBASE_STORAGE_BUCKET="your-storage-bucket"
-    VITE_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
-    VITE_FIREBASE_APP_ID="your-app-id"
-    ```
-
-5.  **Run the development server:**
-    ```bash
     npm run dev
+    # Frontend runs on http://localhost:5173
+    ```
     ```
 
 ## Deployment

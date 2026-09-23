@@ -7,9 +7,7 @@ import SectionHeader from '../components/SectionHeader.jsx';
 import StatCard from '../components/StatCard.jsx';
 import BeforeAfterSlider from '../components/BeforeAfterSlider.jsx';
 
-import { collection, getDocs, addDoc, doc, updateDoc, increment, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase.js';
+import api from '../api/client.js';
 
 const projectCategories = ['All', 'Landscaping', 'Garden Design', 'Farm Work'];
 const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(businessInfo.mapQuery)}&output=embed`;
@@ -32,27 +30,20 @@ export default function Home() {
   useEffect(() => {
     async function loadData() {
       try {
-        const plantSnap = await getDocs(collection(db, 'plants'));
-        if (!plantSnap.empty) setLivePlants(plantSnap.docs.map(d => ({ _id: d.id, ...d.data() })));
+        const [plantRes, projRes, revRes] = await Promise.all([
+          api.get('/plants'),
+          api.get('/projects'),
+          api.get('/reviews')
+        ]);
 
-        const projSnap = await getDocs(collection(db, 'gallery'));
-        if (!projSnap.empty) {
-          setLiveProjects(projSnap.docs.map(d => ({ 
-            id: d.id, 
-            ...d.data(), 
-            before: d.data().beforeImage || '', 
-            after: d.data().afterImage || d.data().image || '',
-            additionalImages: d.data().additionalImages || []
-          })));
-        }
-
-        const revSnap = await getDocs(collection(db, 'reviews'));
-        if (!revSnap.empty) {
-          const approved = revSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.approved);
+        if (plantRes.data) setLivePlants(plantRes.data);
+        if (projRes.data) setLiveProjects(projRes.data);
+        if (revRes.data) {
+          const approved = revRes.data.filter(r => r.approved);
           setCustomerReviews(approved);
         }
       } catch (error) {
-         console.error(error);
+        console.error("Error loading home page data:", error);
       }
     }
 
@@ -61,13 +52,7 @@ export default function Home() {
       sessionStorage.setItem('visited', 'true');
       
       try {
-        const statsRef = doc(db, 'stats', 'visitors');
-        const snap = await getDoc(statsRef);
-        if (snap.exists()) {
-          await updateDoc(statsRef, { count: increment(1) });
-        } else {
-          await setDoc(statsRef, { count: 1 });
-        }
+        await api.post('/stats/visitors/increment');
       } catch (err) {
         console.error('Error tracking visitor:', err);
       }
@@ -96,32 +81,24 @@ export default function Home() {
     if (!reviewForm.name || !reviewForm.text) return;
     setIsSubmitting(true);
 
-    let uploadedUrl = 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=600&q=80';
-    if (reviewForm.plantPhoto) {
-      try {
-         const imageRef = ref(storage, `reviews/${Date.now()}`);
-         await uploadBytes(imageRef, reviewForm.plantPhoto);
-         uploadedUrl = await getDownloadURL(imageRef);
-      } catch (e) {
-         console.error("Error uploading review photo", e);
-      }
-    }
-
-    const newReview = {
-      name: reviewForm.name,
-      rating: Number(reviewForm.rating),
-      text: reviewForm.text,
-      photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
-      plantPhoto: uploadedUrl,
-      approved: false
-    };
-
     try {
-      await addDoc(collection(db, 'reviews'), newReview);
+      const formData = new FormData();
+      formData.append('name', reviewForm.name);
+      formData.append('rating', reviewForm.rating);
+      formData.append('text', reviewForm.text);
+      if (reviewForm.plantPhoto) {
+        formData.append('plantPhoto', reviewForm.plantPhoto);
+      }
+
+      await api.post('/reviews', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       setReviewForm({ name: '', rating: 5, text: '', plantPhoto: null, previewUrl: '' });
       alert("Thank you! Your review has been submitted for approval.");
     } catch (error) {
       console.error("Error submitting review", error);
+      alert("Review submission failed: " + (error.response?.data?.error || error.message));
     }
     setIsSubmitting(false);
   };

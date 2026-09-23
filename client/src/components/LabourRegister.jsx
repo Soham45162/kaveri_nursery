@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import api from '../api/client';
 import { 
   UserPlus, Trash2, Edit, DollarSign, History, X, Check, Printer, 
   Coins, FileText, Upload, Calendar, Award, MapPin, Phone, 
@@ -64,17 +62,17 @@ export default function LabourRegister() {
 
   const fetchData = async () => {
     try {
-      const labSnap = await getDocs(collection(db, 'labours'));
-      setLabours(labSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const [labRes, attRes, payRes, advRes] = await Promise.all([
+        api.get('/labours').catch(() => ({ data: [] })),
+        api.get(`/attendance?month=${monthKey}`).catch(() => ({ data: {} })),
+        api.get(`/payments?month=${monthKey}`).catch(() => ({ data: {} })),
+        api.get(`/advances?month=${monthKey}`).catch(() => ({ data: {} }))
+      ]);
 
-      const attSnap = await getDoc(doc(db, 'attendance', monthKey));
-      setAttendance(attSnap.exists() ? attSnap.data() : {});
-
-      const paySnap = await getDoc(doc(db, 'payments', monthKey));
-      setPayments(paySnap.exists() ? paySnap.data() : {});
-
-      const advSnap = await getDoc(doc(db, 'advances', monthKey));
-      setAdvances(advSnap.exists() ? advSnap.data() : {});
+      if (labRes.data) setLabours(labRes.data);
+      if (attRes.data) setAttendance(attRes.data);
+      if (payRes.data) setPayments(payRes.data);
+      if (advRes.data) setAdvances(advRes.data);
     } catch (err) {
       console.error("Error fetching payroll data:", err);
     }
@@ -107,45 +105,26 @@ export default function LabourRegister() {
     }
 
     setUploading(true);
-    let uploadedPhotoUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'; // generic elegant profile
-
-    if (form.photoFile) {
-      try {
-        const fileRef = ref(storage, `labours/${Date.now()}_${form.photoFile.name}`);
-        await uploadBytes(fileRef, form.photoFile);
-        uploadedPhotoUrl = await getDownloadURL(fileRef);
-      } catch (err) {
-        console.error("Error uploading labor photo:", err);
-        alert("Photo upload failed, using default placeholder.");
-      }
-    }
-
-    const rateNum = Number(form.salaryRate);
-    const joiningDateVal = form.joiningDate || new Date().toISOString().slice(0, 10);
-
-    const labourData = {
-      name: form.name,
-      role: form.skillType, // backward compatibility
-      skillType: form.skillType,
-      phone: form.phone,
-      address: form.address || '',
-      joiningDate: joiningDateVal,
-      salaryType: form.salaryType || 'daily',
-      salaryRate: rateNum,
-      photoUrl: uploadedPhotoUrl,
-      dailyWageHistory: [
-        {
-          date: joiningDateVal,
-          rate: rateNum,
-          notes: 'Initial Rate on Joining'
-        }
-      ],
-      joinedAt: new Date().toISOString()
-    };
 
     try {
-      const docRef = await addDoc(collection(db, 'labours'), labourData);
-      setLabours(prev => [...prev, { id: docRef.id, ...labourData }]);
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('skillType', form.skillType);
+      formData.append('phone', form.phone);
+      formData.append('address', form.address || '');
+      formData.append('joiningDate', form.joiningDate || new Date().toISOString().slice(0, 10));
+      formData.append('salaryType', form.salaryType || 'daily');
+      formData.append('salaryRate', form.salaryRate);
+
+      if (form.photoFile) {
+        formData.append('photoFile', form.photoFile);
+      }
+
+      const res = await api.post('/labours', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setLabours(prev => [...prev, res.data]);
       setForm({
         name: '',
         skillType: 'Gardener',
@@ -160,7 +139,7 @@ export default function LabourRegister() {
       alert("Labour worker registered successfully!");
     } catch (err) {
       console.error("Error writing labour worker doc:", err);
-      alert("Could not register worker. Please try again.");
+      alert("Could not register worker: " + (err.response?.data?.error || err.message));
     } finally {
       setUploading(false);
     }
@@ -180,58 +159,30 @@ export default function LabourRegister() {
     }
 
     setUploading(true);
-    let photoUrl = editingLabour.photoUrl || '';
-
-    if (editingLabour.photoFile) {
-      try {
-        const fileRef = ref(storage, `labours/${Date.now()}_${editingLabour.photoFile.name}`);
-        await uploadBytes(fileRef, editingLabour.photoFile);
-        photoUrl = await getDownloadURL(fileRef);
-      } catch (err) {
-        console.error("Error uploading photo:", err);
-        alert("Photo upload failed, keeping existing photo.");
-      }
-    }
-
-    const currentLabour = labours.find(l => l.id === editingLabour.id);
-    let updatedHistory = editingLabour.dailyWageHistory || currentLabour?.dailyWageHistory || [];
-    
-    const newRate = Number(editingLabour.salaryRate);
-    const oldRate = Number(currentLabour?.salaryRate || 0);
-
-    if (newRate !== oldRate) {
-      updatedHistory = [
-        ...updatedHistory,
-        {
-          date: new Date().toISOString().slice(0, 10),
-          rate: newRate,
-          notes: `Rate updated from ₹${oldRate} to ₹${newRate}`
-        }
-      ];
-    }
 
     try {
-      const docRef = doc(db, 'labours', editingLabour.id);
-      const updatedData = {
-        name: editingLabour.name,
-        role: editingLabour.skillType, // backward compatibility
-        skillType: editingLabour.skillType,
-        phone: editingLabour.phone,
-        address: editingLabour.address || '',
-        joiningDate: editingLabour.joiningDate || currentLabour?.joiningDate || '',
-        salaryType: editingLabour.salaryType || 'daily',
-        salaryRate: newRate,
-        photoUrl: photoUrl,
-        dailyWageHistory: updatedHistory
-      };
-      
-      await setDoc(docRef, updatedData, { merge: true });
-      setLabours(prev => prev.map(l => l.id === editingLabour.id ? { ...l, ...updatedData } : l));
+      const formData = new FormData();
+      formData.append('name', editingLabour.name);
+      formData.append('skillType', editingLabour.skillType);
+      formData.append('phone', editingLabour.phone);
+      formData.append('address', editingLabour.address || '');
+      formData.append('salaryType', editingLabour.salaryType || 'daily');
+      formData.append('salaryRate', editingLabour.salaryRate);
+
+      if (editingLabour.photoFile) {
+        formData.append('photoFile', editingLabour.photoFile);
+      }
+
+      const res = await api.put(`/labours/${editingLabour.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setLabours(prev => prev.map(l => (l.id === editingLabour.id || l._id === editingLabour.id) ? res.data : l));
       setEditingLabour(null);
       alert("Labourer profile updated successfully!");
     } catch (err) {
       console.error("Error updating worker doc:", err);
-      alert("Could not update profile.");
+      alert("Could not update profile: " + (err.response?.data?.error || err.message));
     } finally {
       setUploading(false);
     }
@@ -240,11 +191,12 @@ export default function LabourRegister() {
   const removeLabour = async (id) => {
     if (!window.confirm("Are you sure you want to remove this labour worker? All history will remain in monthly records but profile is deleted.")) return;
     try {
-      await deleteDoc(doc(db, 'labours', id));
-      setLabours(prev => prev.filter(l => l.id !== id));
+      await api.delete(`/labours/${id}`);
+      setLabours(prev => prev.filter(l => l.id !== id && l._id !== id));
       alert("Worker profile deleted.");
     } catch (err) {
       console.error("Error deleting worker:", err);
+      alert("Could not delete worker: " + (err.response?.data?.error || err.message));
     }
   };
 
@@ -271,8 +223,14 @@ export default function LabourRegister() {
     setAttendance(newAttendance);
 
     try {
-      const docRef = doc(db, 'attendance', monthKey);
-      await setDoc(docRef, newAttendance, { merge: true });
+      const dayNum = String(day).padStart(2, '0');
+      const dateStr = `${monthKey}-${dayNum}`;
+      await api.post('/attendance', {
+        labourId,
+        date: dateStr,
+        status,
+        customAmount: amount
+      });
     } catch (err) {
       console.error("Error updating attendance state in database:", err);
     }
@@ -280,7 +238,7 @@ export default function LabourRegister() {
 
   // Attendance Toggle Statuses
   const toggleStatus = async (labourId, day) => {
-    const labour = labours.find(l => l.id === labourId);
+    const labour = labours.find(l => l.id === labourId || l._id === labourId);
     const currentStatus = attendance[labourId]?.[day];
 
     if (!currentStatus) {
@@ -307,8 +265,6 @@ export default function LabourRegister() {
     }
   };
 
-
-
   // Salary Payments and Advances Record Triggers
   const recordPayment = async (e) => {
     e.preventDefault();
@@ -317,48 +273,47 @@ export default function LabourRegister() {
     const amountNum = Number(payForm.amount);
     if (isNaN(amountNum) || amountNum <= 0) return;
     
-    const newTx = {
-      id: Date.now().toString(),
-      date: payForm.date || new Date().toISOString().slice(0, 10),
-      amount: amountNum,
-      notes: payForm.notes || 'Salary Payment'
-    };
-    
-    const newPayments = { ...payments };
-    if (!newPayments[payingLabourId]) {
-      newPayments[payingLabourId] = [];
-    }
-    newPayments[payingLabourId].push(newTx);
-    
-    setPayments(newPayments);
-    setPayingLabourId(null);
-    setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-    
     try {
-      const docRef = doc(db, 'payments', monthKey);
-      await setDoc(docRef, newPayments);
+      const res = await api.post('/payments', {
+        labourId: payingLabourId,
+        date: payForm.date || new Date().toISOString().slice(0, 10),
+        amount: amountNum,
+        notes: payForm.notes || 'Salary Payment'
+      });
+      
+      const newPayments = { ...payments };
+      if (!newPayments[payingLabourId]) {
+        newPayments[payingLabourId] = [];
+      }
+      newPayments[payingLabourId].push(res.data);
+      
+      setPayments(newPayments);
+      setPayingLabourId(null);
+      setPayForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+      alert("Payment recorded successfully!");
     } catch (err) {
       console.error("Error saving payment doc:", err);
+      alert("Could not record payment: " + (err.response?.data?.error || err.message));
     }
   };
 
   const deletePayment = async (labourId, txId) => {
     if (!window.confirm("Are you sure you want to delete this payment record?")) return;
     
-    const newPayments = { ...payments };
-    if (newPayments[labourId]) {
-      newPayments[labourId] = newPayments[labourId].filter(tx => tx.id !== txId);
-      if (newPayments[labourId].length === 0) {
-        delete newPayments[labourId];
-      }
-    }
-    
-    setPayments(newPayments);
     try {
-      const docRef = doc(db, 'payments', monthKey);
-      await setDoc(docRef, newPayments);
+      await api.delete(`/payments/${txId}`);
+      const newPayments = { ...payments };
+      if (newPayments[labourId]) {
+        newPayments[labourId] = newPayments[labourId].filter(tx => tx.id !== txId);
+        if (newPayments[labourId].length === 0) {
+          delete newPayments[labourId];
+        }
+      }
+      setPayments(newPayments);
+      alert("Payment deleted.");
     } catch (err) {
       console.error("Error deleting payment transaction:", err);
+      alert("Could not delete payment: " + (err.response?.data?.error || err.message));
     }
   };
 
@@ -369,48 +324,47 @@ export default function LabourRegister() {
     const amountNum = Number(advanceForm.amount);
     if (isNaN(amountNum) || amountNum <= 0) return;
     
-    const newTx = {
-      id: Date.now().toString(),
-      date: advanceForm.date || new Date().toISOString().slice(0, 10),
-      amount: amountNum,
-      notes: advanceForm.notes || 'Salary Advance'
-    };
-    
-    const newAdvances = { ...advances };
-    if (!newAdvances[recordingAdvanceLabourId]) {
-      newAdvances[recordingAdvanceLabourId] = [];
-    }
-    newAdvances[recordingAdvanceLabourId].push(newTx);
-    
-    setAdvances(newAdvances);
-    setRecordingAdvanceLabourId(null);
-    setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
-    
     try {
-      const docRef = doc(db, 'advances', monthKey);
-      await setDoc(docRef, newAdvances);
+      const res = await api.post('/advances', {
+        labourId: recordingAdvanceLabourId,
+        date: advanceForm.date || new Date().toISOString().slice(0, 10),
+        amount: amountNum,
+        notes: advanceForm.notes || 'Salary Advance'
+      });
+      
+      const newAdvances = { ...advances };
+      if (!newAdvances[recordingAdvanceLabourId]) {
+        newAdvances[recordingAdvanceLabourId] = [];
+      }
+      newAdvances[recordingAdvanceLabourId].push(res.data);
+      
+      setAdvances(newAdvances);
+      setRecordingAdvanceLabourId(null);
+      setAdvanceForm({ amount: '', notes: '', date: new Date().toISOString().slice(0, 10) });
+      alert("Advance recorded successfully!");
     } catch (err) {
       console.error("Error saving advance doc:", err);
+      alert("Could not record advance: " + (err.response?.data?.error || err.message));
     }
   };
 
   const deleteAdvance = async (labourId, txId) => {
     if (!window.confirm("Are you sure you want to delete this advance record?")) return;
     
-    const newAdvances = { ...advances };
-    if (newAdvances[labourId]) {
-      newAdvances[labourId] = newAdvances[labourId].filter(tx => tx.id !== txId);
-      if (newAdvances[labourId].length === 0) {
-        delete newAdvances[labourId];
-      }
-    }
-    
-    setAdvances(newAdvances);
     try {
-      const docRef = doc(db, 'advances', monthKey);
-      await setDoc(docRef, newAdvances);
+      await api.delete(`/advances/${txId}`);
+      const newAdvances = { ...advances };
+      if (newAdvances[labourId]) {
+        newAdvances[labourId] = newAdvances[labourId].filter(tx => tx.id !== txId);
+        if (newAdvances[labourId].length === 0) {
+          delete newAdvances[labourId];
+        }
+      }
+      setAdvances(newAdvances);
+      alert("Advance deleted.");
     } catch (err) {
       console.error("Error deleting advance transaction:", err);
+      alert("Could not delete advance: " + (err.response?.data?.error || err.message));
     }
   };
 

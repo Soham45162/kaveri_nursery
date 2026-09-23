@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_plants_name ON plants(name);
 CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
-    category VARCHAR(100) NOT NULL CHECK (category IN ('Landscaping', 'Garden Design', 'Farm Work')),
+    category VARCHAR(100) NOT NULL DEFAULT 'Garden Design',
     location VARCHAR(255),
     duration VARCHAR(100),
     scope TEXT NOT NULL,
@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS labour_attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     labour_id UUID NOT NULL REFERENCES labours(id) ON DELETE CASCADE,
     attendance_date DATE NOT NULL,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('Full', 'Half', 'Absent', 'Custom')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('P', 'A', 'HD', 'Full', 'Half', 'Present', 'Absent', 'HalfDay', 'Custom')),
     custom_amount NUMERIC(10, 2) CHECK (custom_amount IS NULL OR custom_amount >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

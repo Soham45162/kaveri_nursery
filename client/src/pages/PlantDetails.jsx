@@ -4,8 +4,7 @@ import {
   Activity, ShieldAlert, Sparkles, HeartPulse, ClipboardCheck, Calendar
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase.js';
+import api from '../api/client.js';
 
 export default function PlantDetails() {
   const { id } = useParams();
@@ -16,9 +15,9 @@ export default function PlantDetails() {
   useEffect(() => {
     async function loadPlant() {
       try {
-        const docSnap = await getDoc(doc(db, 'plants', id));
-        if (docSnap.exists()) {
-          setPlant({ _id: docSnap.id, ...docSnap.data() });
+        const res = await api.get(`/plants/${id}`);
+        if (res.data) {
+          setPlant(res.data);
         }
       } catch (e) {
         console.error("Error fetching plant details", e);
