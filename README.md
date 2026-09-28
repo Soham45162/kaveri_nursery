@@ -61,5 +61,6 @@ A complete modern, responsive, professional nursery management website built for
 
 ## Deployment
 
-The project is configured for seamless deployment on Netlify.
-Ensure that the **Build Command** is set to `npm run build` and the **Publish Directory** is set to `dist`. You must also add the `VITE_FIREBASE_*` environment variables in your Netlify site settings.
+* **Frontend:** Deployed on **GitHub Pages** (`https://Soham45162.github.io/kaveri_nursery`)
+* **Backend API & PostgreSQL Database:** Hosted on **Render** (`https://kaveri-nursery.onrender.com/api`) with a PostgreSQL database instance.
+* The application runs 100% on **PostgreSQL** with zero Firebase dependencies.
