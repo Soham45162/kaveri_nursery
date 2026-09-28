@@ -4,6 +4,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
+function safeDateStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
 // ==========================================
 // ATTENDANCE ROUTES
 // ==========================================
@@ -98,7 +104,7 @@ router.get('/payments', authenticateToken, requireAdmin, async (req, res) => {
       if (!formatted[row.labour_id]) formatted[row.labour_id] = [];
       formatted[row.labour_id].push({
         id: row.id,
-        date: row.payment_date ? row.payment_date.toISOString().slice(0, 10) : '',
+        date: safeDateStr(row.payment_date),
         amount: Number(row.amount),
         notes: row.notes || ''
       });
@@ -135,7 +141,7 @@ router.post('/payments', authenticateToken, requireAdmin, async (req, res) => {
     res.status(201).json({
       id: row.id,
       labourId: row.labour_id,
-      date: row.payment_date ? row.payment_date.toISOString().slice(0, 10) : '',
+      date: safeDateStr(row.payment_date),
       amount: Number(row.amount),
       notes: row.notes
     });
@@ -182,7 +188,7 @@ router.get('/advances', authenticateToken, requireAdmin, async (req, res) => {
       if (!formatted[row.labour_id]) formatted[row.labour_id] = [];
       formatted[row.labour_id].push({
         id: row.id,
-        date: row.advance_date ? row.advance_date.toISOString().slice(0, 10) : '',
+        date: safeDateStr(row.advance_date),
         amount: Number(row.amount),
         notes: row.notes || ''
       });
@@ -219,7 +225,7 @@ router.post('/advances', authenticateToken, requireAdmin, async (req, res) => {
     res.status(201).json({
       id: row.id,
       labourId: row.labour_id,
-      date: row.advance_date ? row.advance_date.toISOString().slice(0, 10) : '',
+      date: safeDateStr(row.advance_date),
       amount: Number(row.amount),
       notes: row.notes
     });

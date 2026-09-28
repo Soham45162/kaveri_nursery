@@ -145,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC);
 CREATE TABLE IF NOT EXISTS bills (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bill_number VARCHAR(50) NOT NULL UNIQUE,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('Bill', 'Quotation')),
+    type VARCHAR(50) NOT NULL CHECK (type IN ('Bill', 'Quotation', 'Invoice')),
     customer_name VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(50),
     date DATE NOT NULL DEFAULT CURRENT_DATE,

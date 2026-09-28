@@ -9,6 +9,12 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
+function safeDateStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
 async function formatLabour(row, req) {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   
@@ -28,13 +34,13 @@ async function formatLabour(row, req) {
     role: row.skill_type,
     phone: row.phone,
     address: row.address || '',
-    joiningDate: row.joining_date ? row.joining_date.toISOString().slice(0, 10) : '',
+    joiningDate: safeDateStr(row.joining_date),
     salaryType: row.salary_type,
     salaryRate: Number(row.salary_rate),
     photoUrl: row.has_photo ? `${baseUrl}/api/labours/${row.id}/photo` : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
     isActive: row.is_active,
     dailyWageHistory: wageRes.rows.map(w => ({
-      date: w.effective_date ? w.effective_date.toISOString().slice(0, 10) : '',
+      date: safeDateStr(w.effective_date),
       rate: Number(w.rate),
       notes: w.notes || ''
     })),

@@ -4,6 +4,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
+function safeDateStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
 // GET /api/bills - Fetch all bills with lines
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -29,7 +35,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
       type: b.type,
       customerName: b.customer_name,
       customerPhone: b.customer_phone || '',
-      date: b.date ? b.date.toISOString().slice(0, 10) : '',
+      date: safeDateStr(b.date),
       notes: b.notes || '',
       total: Number(b.total),
       lines: itemsByBill[b.id] || [],
@@ -54,11 +60,23 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Generate unique bill number
-    const countRes = await client.query('SELECT COUNT(*) FROM bills WHERE type = $1', [type || 'Quotation']);
-    const count = parseInt(countRes.rows[0].count, 10) + 1;
-    const prefix = type === 'Bill' ? 'BILL' : 'QT';
-    const billNumber = `${prefix}-${String(count).padStart(4, '0')}`;
+    // Generate guaranteed unique sequential bill number
+    const prefix = type === 'Bill' ? 'BILL' : (type === 'Invoice' ? 'INV' : 'QT');
+    const latestRes = await client.query(`
+      SELECT bill_number FROM bills 
+      WHERE bill_number LIKE $1 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `, [`${prefix}-%`]);
+
+    let nextNum = 1;
+    if (latestRes.rows.length > 0) {
+      const match = latestRes.rows[0].bill_number.match(/(\d+)$/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+    const billNumber = `${prefix}-${String(nextNum).padStart(4, '0')}`;
 
     const total = lines.reduce((sum, line) => sum + (Number(line.qty || 0) * Number(line.rate || 0)), 0);
 
@@ -106,7 +124,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       type: bill.type,
       customerName: bill.customer_name,
       customerPhone: bill.customer_phone || '',
-      date: bill.date ? bill.date.toISOString().slice(0, 10) : '',
+      date: safeDateStr(bill.date),
       notes: bill.notes || '',
       total: Number(bill.total),
       lines: insertedLines,
