@@ -7,20 +7,31 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const submit = async (event) => {
     event.preventDefault();
-    const result = await login(email, password);
-    if (result.ok) {
-      if (result.user?.role === 'admin') {
-        navigate('/admin');
+    if (!email || !password) return;
+    setError('');
+    setLoading(true);
+    try {
+      const result = await login(email, password);
+      if (result.ok) {
+        if (result.user?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          setError("Access Denied: You do not have admin privileges.");
+        }
       } else {
-        setError("Access Denied: You do not have admin privileges.");
+        const msg = result.message?.toLowerCase().includes('network') 
+          ? "Cloud server is waking up. Please wait 10-15 seconds and try again."
+          : (result.message || 'Invalid email or password');
+        setError(msg);
       }
-    } else {
-      setError(result.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -34,14 +45,23 @@ export default function Login() {
         </div>
         <label className="mb-4 flex items-center gap-3 rounded-xl border border-leaf-700/20 bg-white px-4 py-3 dark:bg-leaf-900">
           <Mail size={18} />
-          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" className="w-full bg-transparent outline-none" />
+          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" className="w-full bg-transparent outline-none" disabled={loading} />
         </label>
         <label className="mb-4 flex items-center gap-3 rounded-xl border border-leaf-700/20 bg-white px-4 py-3 dark:bg-leaf-900">
           <Lock size={18} />
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="w-full bg-transparent outline-none" />
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="w-full bg-transparent outline-none" disabled={loading} />
         </label>
         {error && <p className="mb-4 rounded-xl bg-red-100 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-        <button className="btn-primary w-full">Login</button>
+        <button disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
+          {loading ? (
+            <>
+              <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              <span>Signing In...</span>
+            </>
+          ) : (
+            <span>Login</span>
+          )}
+        </button>
       </form>
     </main>
   );
