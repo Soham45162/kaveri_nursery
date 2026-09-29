@@ -62,24 +62,31 @@ async function bootstrapAdmin() {
     const adminEmail = (process.env.ADMIN_EMAIL || 'sohamkedar02@gmail.com').toLowerCase().trim();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
-    if (!adminPassword) return;
+    if (!adminPassword) {
+      console.log(`[Bootstrap] Notice: ADMIN_PASSWORD is not set in environment. Skipping password synchronization for ${adminEmail}.`);
+      return;
+    }
 
-    const checkUser = await query('SELECT id, password_hash FROM users WHERE email = $1', [adminEmail]);
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(adminPassword, salt);
+
+    const checkUser = await query('SELECT id, email, password_hash, role FROM users WHERE LOWER(TRIM(email)) = $1', [adminEmail]);
 
     if (checkUser.rows.length === 0) {
       await query(`
         INSERT INTO users (email, password_hash, name, role)
         VALUES ($1, $2, $3, 'admin')
-        ON CONFLICT (email) DO NOTHING
+        ON CONFLICT (email) 
+        DO UPDATE SET role = 'admin', name = 'Ramnath Kedar (Owner)', password_hash = EXCLUDED.password_hash;
       `, [adminEmail, passwordHash, 'Ramnath Kedar (Owner)']);
-      console.log(`[Bootstrap] Admin account (${adminEmail}) initialized.`);
-    } else if (!checkUser.rows[0].password_hash) {
+      console.log(`[Bootstrap] Admin account (${adminEmail}) created with configured ADMIN_PASSWORD.`);
+    } else {
       await query(`
-        UPDATE users SET password_hash = $1, role = 'admin' WHERE email = $2
+        UPDATE users 
+        SET password_hash = $1, role = 'admin', name = COALESCE(name, 'Ramnath Kedar (Owner)')
+        WHERE LOWER(TRIM(email)) = $2
       `, [passwordHash, adminEmail]);
-      console.log(`[Bootstrap] Admin password for (${adminEmail}) configured.`);
+      console.log(`[Bootstrap] Admin account (${adminEmail}) password synchronized successfully.`);
     }
   } catch (err) {
     console.warn('[Bootstrap] Notice:', err.message);

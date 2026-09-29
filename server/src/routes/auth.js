@@ -49,7 +49,7 @@ router.post('/login', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const result = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
+    const result = await query('SELECT * FROM users WHERE LOWER(TRIM(email)) = $1', [normalizedEmail]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password' });
