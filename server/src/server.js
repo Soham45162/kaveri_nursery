@@ -55,6 +55,45 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
+async function initDatabase() {
+  try {
+    const { query } = await import('./config/db.js');
+    const fs = (await import('fs')).default;
+    const schemaPath = path.resolve(__dirname, '../../database/schema.sql');
+
+    if (fs.existsSync(schemaPath)) {
+      // Safely preserve legacy tables by renaming to old_<name> if columns differ
+      const legacyTables = ['plants', 'gallery', 'reviews', 'orders', 'contacts', 'newsletters'];
+      for (const tbl of legacyTables) {
+        const checkTbl = await query(`
+          SELECT column_name FROM information_schema.columns 
+          WHERE table_schema = 'public' AND table_name = $1
+        `, [tbl]);
+
+        if (checkTbl.rows.length > 0) {
+          const cols = checkTbl.rows.map(r => r.column_name);
+          const isOld = (tbl === 'plants' && !cols.includes('image_data')) ||
+                        (tbl === 'reviews' && !cols.includes('avatar_data')) ||
+                        (tbl === 'gallery') || (tbl === 'orders') || (tbl === 'contacts') || (tbl === 'newsletters');
+
+          if (isOld) {
+            const oldName = `old_${tbl}`;
+            console.log(`[InitDB] Preserving legacy table '${tbl}' as '${oldName}'...`);
+            await query(`DROP TABLE IF EXISTS "${oldName}" CASCADE;`);
+            await query(`ALTER TABLE "${tbl}" RENAME TO "${oldName}";`);
+          }
+        }
+      }
+
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      await query(schemaSql);
+      console.log('[InitDB] PostgreSQL schema verified and applied successfully.');
+    }
+  } catch (err) {
+    console.warn('[InitDB] Notice:', err.message);
+  }
+}
+
 async function bootstrapAdmin() {
   try {
     const { query } = await import('./config/db.js');
@@ -112,5 +151,6 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`  Database: PostgreSQL 18 (kaveri_nursery)`);
   console.log(`  Health check: http://localhost:${PORT}/api/health`);
   console.log(`======================================================\n`);
+  await initDatabase();
   await bootstrapAdmin();
 });
