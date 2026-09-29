@@ -62,6 +62,19 @@ async function bootstrapAdmin() {
     const adminEmail = (process.env.ADMIN_EMAIL || 'sohamkedar02@gmail.com').toLowerCase().trim();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
+    // 1. Ensure password_hash column exists on users table (safe non-destructive DDL)
+    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)');
+
+    // 2. If legacy password column exists, backfill password_hash
+    await query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'password') THEN
+          UPDATE users SET password_hash = password WHERE password_hash IS NULL AND password IS NOT NULL;
+        END IF;
+      END $$;
+    `);
+
     if (!adminPassword) {
       console.log(`[Bootstrap] Notice: ADMIN_PASSWORD is not set in environment. Skipping password synchronization for ${adminEmail}.`);
       return;
@@ -75,10 +88,10 @@ async function bootstrapAdmin() {
     if (checkUser.rows.length === 0) {
       await query(`
         INSERT INTO users (email, password_hash, name, role)
-        VALUES ($1, $2, $3, 'admin')
+        VALUES ($1, $2, 'Ramnath Kedar (Owner)', 'admin')
         ON CONFLICT (email) 
         DO UPDATE SET role = 'admin', name = 'Ramnath Kedar (Owner)', password_hash = EXCLUDED.password_hash;
-      `, [adminEmail, passwordHash, 'Ramnath Kedar (Owner)']);
+      `, [adminEmail, passwordHash]);
       console.log(`[Bootstrap] Admin account (${adminEmail}) created with configured ADMIN_PASSWORD.`);
     } else {
       await query(`
