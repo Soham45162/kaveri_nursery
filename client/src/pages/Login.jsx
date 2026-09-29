@@ -8,30 +8,53 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const submit = async (event) => {
     event.preventDefault();
     if (!email || !password) return;
     setError('');
     setLoading(true);
+    setStatusMessage('Connecting to server...');
+
+    const maxRetries = 3;
+    const retryDelays = [3000, 6000, 10000];
+
     try {
-      const result = await login(email, password);
-      if (result.ok) {
-        if (result.user?.role === 'admin') {
-          navigate('/admin');
-        } else {
-          setError("Access Denied: You do not have admin privileges.");
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const result = await login(email, password);
+
+        if (result.ok) {
+          if (result.user?.role === 'admin') {
+            navigate('/admin');
+            return;
+          } else {
+            setError("Access Denied: You do not have admin privileges.");
+            return;
+          }
         }
-      } else {
-        const msg = result.message?.toLowerCase().includes('network') 
-          ? "Cloud server is waking up. Please wait 10-15 seconds and try again."
-          : (result.message || 'Invalid email or password');
-        setError(msg);
+
+        // If the error is a definitive auth rejection (like 401 Invalid Credentials), don't retry
+        const isNetworkOrColdStart = result.isNetworkError || result.message?.toLowerCase().includes('network') || result.message?.toLowerCase().includes('timeout');
+
+        if (!isNetworkOrColdStart || attempt === maxRetries) {
+          setError(result.message || 'Invalid email or password');
+          return;
+        }
+
+        // Handle cold start retry
+        const nextDelay = retryDelays[attempt] || 5000;
+        setStatusMessage(`Server starting up (waking from sleep)... Retrying in ${nextDelay / 1000}s (Attempt ${attempt + 1}/${maxRetries})`);
+        await sleep(nextDelay);
+        setStatusMessage(`Connecting to server (Attempt ${attempt + 2}/${maxRetries + 1})...`);
       }
     } finally {
       setLoading(false);
+      setStatusMessage('');
     }
   };
 
@@ -51,12 +74,18 @@ export default function Login() {
           <Lock size={18} />
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="w-full bg-transparent outline-none" disabled={loading} />
         </label>
+        {statusMessage && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-200">
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-600 border-t-transparent flex-shrink-0" />
+            <span>{statusMessage}</span>
+          </div>
+        )}
         {error && <p className="mb-4 rounded-xl bg-red-100 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
         <button disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
           {loading ? (
             <>
               <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              <span>Signing In...</span>
+              <span>{statusMessage ? 'Please Wait...' : 'Signing In...'}</span>
             </>
           ) : (
             <span>Login</span>

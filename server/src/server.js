@@ -55,10 +55,42 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+async function bootstrapAdmin() {
+  try {
+    const { query } = await import('./config/db.js');
+    const bcrypt = (await import('bcryptjs')).default;
+    const adminEmail = (process.env.ADMIN_EMAIL || 'sohamkedar02@gmail.com').toLowerCase().trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminPassword) return;
+
+    const checkUser = await query('SELECT id, password_hash FROM users WHERE email = $1', [adminEmail]);
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(adminPassword, salt);
+
+    if (checkUser.rows.length === 0) {
+      await query(`
+        INSERT INTO users (email, password_hash, name, role)
+        VALUES ($1, $2, $3, 'admin')
+        ON CONFLICT (email) DO NOTHING
+      `, [adminEmail, passwordHash, 'Ramnath Kedar (Owner)']);
+      console.log(`[Bootstrap] Admin account (${adminEmail}) initialized.`);
+    } else if (!checkUser.rows[0].password_hash) {
+      await query(`
+        UPDATE users SET password_hash = $1, role = 'admin' WHERE email = $2
+      `, [passwordHash, adminEmail]);
+      console.log(`[Bootstrap] Admin password for (${adminEmail}) configured.`);
+    }
+  } catch (err) {
+    console.warn('[Bootstrap] Notice:', err.message);
+  }
+}
+
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n======================================================`);
   console.log(`  Kaveri Nursery API Server Running on Port ${PORT}`);
   console.log(`  Database: PostgreSQL 18 (kaveri_nursery)`);
   console.log(`  Health check: http://localhost:${PORT}/api/health`);
   console.log(`======================================================\n`);
+  await bootstrapAdmin();
 });

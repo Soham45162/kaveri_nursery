@@ -56,6 +56,10 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
+    if (!user.password_hash) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -77,7 +81,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /login:', err);
-    res.status(500).json({ error: 'Server error during login' });
+    res.status(500).json({ error: err.message || 'Server error during login' });
   }
 });
 

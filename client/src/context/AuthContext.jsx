@@ -52,10 +52,11 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         return { ok: true, user: res.data.user };
       }
-      return { ok: false, message: res.data.error || 'Login failed' };
+      return { ok: false, message: res.data.error || res.data.message || 'Login failed', isNetworkError: false };
     } catch (error) {
-      const message = error.response?.data?.error || error.message || 'Login failed';
-      return { ok: false, message };
+      const isNetworkError = !error.response;
+      const message = error.response?.data?.error || error.response?.data?.message || (isNetworkError ? 'Network Connection Error' : error.message || 'Login failed');
+      return { ok: false, message, isNetworkError };
     }
   };
 
@@ -69,9 +70,9 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         return { ok: true, user: res.data.user };
       }
-      return { ok: false, message: res.data.error || 'Registration failed' };
+      return { ok: false, message: res.data.error || res.data.message || 'Registration failed' };
     } catch (error) {
-      const message = error.response?.data?.error || error.message || 'Registration failed';
+      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Registration failed';
       return { ok: false, message };
     }
   };
